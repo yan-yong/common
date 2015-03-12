@@ -1,6 +1,6 @@
 include $(top_srcdir)/common.mk
 
-SUBDIRS=log httpserver judyarray bitmap jsoncpp thread utility fetcher httpparser
+SUBDIRS=log httpserver judyarray bitmap jsoncpp thread utility fetcher httpparser dnsresolver httpclient
 
 include_HEADERS=	\
 	log/log.h \
