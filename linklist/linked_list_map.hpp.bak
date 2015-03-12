@@ -1,0 +1,87 @@
+#ifndef __LINKED_LIST_MAP_HPP__
+#define __LINKED_LIST_MAP_HPP__
+#include <stdlib.h>
+#include <map>
+#include "linked_list.hpp"
+
+template<typename K, typename T, linked_list_node_t T::*list_node>
+class linked_list_map: public std::map<K, linked_list_t<T, &T::*list_node> >
+{
+    typedef linked_list_t<T, &T::*list_node> List;
+
+public:
+    linked_list_map(){}
+    List get(const K& key) const
+    {
+        List lst;
+        const_iterator it = this->find(key);
+        if(it != this->end())
+            lst = it->second;
+        if(lst.empty())
+            this->erase(it);
+        return lst; 
+    }
+    bool empty(const K& key) const 
+    {
+        return get(key).empty(); 
+    }
+    void clear(const K& key)
+    {
+        get(key).clear();
+    }
+    void add_front(const K& key, T& e)
+    {
+        operator[](key).add_front(e);
+    }
+    void add_tail(const K& key, T& node)
+    {
+        operator[](key).add_tail(e);
+    }
+    bool del(const K& key, T &node)
+    {
+        iterator it = this->find(key);
+        if(it == this->end())
+           return false;
+        bool ret = it->second.del(key);
+        if(it->second.empty())
+            this->erase(it); 
+        return ret;
+    }
+    size_t size() const
+    {
+        size_t sz = 0;
+        for(iterator it = this->begin(); it != this->end(); it++)
+            sz += it->second.size();
+        return sz;
+    }
+    T* get_front()
+    {
+        assert(!empty());
+        return (this->begin()->second).get_front(); 
+    }
+    T* get_tail()
+    {
+        assert(!empty());
+        return (this->rbegin()->second).get_tail(); 
+    }
+    T* pop_front()
+    {
+        assert(!empty());
+        iterator it = this->begin();
+        T* ret = it->second.pop_front();
+        if(it->second.empty())
+            this->erase(it);
+        return ret;
+    }
+    T* pop_tail()
+    {
+        assert(!empty());
+        reverse_iterator it = this->rbegin();
+        T* ret = it->second.pop_tail();
+        if(it->second.empty())
+            this->erase(it);
+        return ret;
+    }
+};
+
+#endif
