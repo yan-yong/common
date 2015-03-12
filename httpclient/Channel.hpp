@@ -1,8 +1,8 @@
-#ifndef __SERV_CHANNEL_HPP
-#define __SERV_CHANNEL_HPP
+#ifndef __CHANNEL_HPP
+#define __CHANNEL_HPP
 
-#include "SchedulerTypes.hpp"
 #include "linklist/linked_list_map.hpp"
+#include "SchedulerTypes.hpp"
 #include "TUtility.hpp"
 
 /**

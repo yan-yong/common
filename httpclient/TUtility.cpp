@@ -24,9 +24,7 @@
 #include <arpa/inet.h>
 #include <errno.h>
 #include <openssl/md5.h>
-
-#include "ssdebug.h"
-#include "URI.hpp"
+#include "httpparser/URI.hpp"
 #include "hlink.h"
 #include "Http.hpp"
 

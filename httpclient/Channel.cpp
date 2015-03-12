@@ -1,4 +1,4 @@
-#include "ServChannel.hpp"
+#include "Channel.hpp"
 #include "utility/murmur_hash.h"
 
 /** 静态成员初始化 **/
@@ -394,7 +394,7 @@ void RemoveResource(Resource* res)
         if(res->conn_)
         {
             __release_connection(res->serv_, res->conn_);
-            res->conn_ = NULL；
+            res->conn_ = NULL;
         }
         if(__empty(res->serv_))
             check_add_cache(res->serv_);

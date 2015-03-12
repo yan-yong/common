@@ -1,9 +1,9 @@
 #ifndef __STORAGE_HPP
 #define __STORAGE_HPP
 
-#include <boost/unordered_map>
+#include <boost/unordered_map.hpp>
 #include "singleton/Singleton.h"
-#include "Channel.h"
+#include "Channel.hpp"
 #include "lock/lock.hpp"
 #include "utility/murmur_hash.h"
 #include "linklist/linked_list.hpp"

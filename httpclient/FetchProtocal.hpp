@@ -3,8 +3,7 @@
 
 #include <string>
 #include <vector>
-
-#include "Fetcher.hpp"
+#include "fetcher/Fetcher.hpp"
 
 class FetcherResponse : public IFetchMessage
 {
