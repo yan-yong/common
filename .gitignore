@@ -22,3 +22,6 @@ _*
 *.swp
 *.Po
 deps
+*.swm
+*.swo
+*.swk
