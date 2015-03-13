@@ -23,3 +23,7 @@ _*
 *.Po
 deps
 *.out
+*.Tpo
+*.swm
+*.swo
+*.swk
