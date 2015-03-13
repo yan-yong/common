@@ -7,6 +7,7 @@
 #include "lock/lock.hpp"
 #include "utility/murmur_hash.h"
 #include "linklist/linked_list.hpp"
+#include "ChannelManager.hpp"
 
 /*
 * Storage负责：
@@ -49,6 +50,7 @@ class Storage
     size_t   host_cache_max_; 
     size_t   serv_cache_max_;
     bool     close_;
+    ChannelManager* channel_manager_;
 
     ServKey __aigetkey(const struct addrinfo *addrinfo, socekaddr* local_addr) 
     {
@@ -102,7 +104,7 @@ class Storage
             unsigned delete_cnt = EXCEED_DELETE_RATE * serv_cache_cnt;
             if(!delete_cnt)
                 delete_cnt = 1;
-            HostCacheList cache_lst = PopHostCache(delete_cnt);
+            HostCacheList cache_lst = channel_manager_->PopHostCache(delete_cnt);
             HostChannel * cur_host = NULL;
             while(!cache_lst.empty())
             {
@@ -136,7 +138,7 @@ public:
     Storage(size_t host_cache_max = MAX_CACHE_HOST, size_t serv_cache_max = MAX_CACHE_SERV):
         host_cache_max_(host_cache_max), serv_cache_max_(serv_cache_max), close_(false)
     {
-        InitializeCache();
+        channel_manager_ = ChannelManager::Instance();
     }
 
     ~Storage()
@@ -330,13 +332,13 @@ public:
         //如果资源被重定向资源所引用，则不能删除
         if(res->root_ref_ == 0)
         {
-            Channel::RemoveResource(res);
+            channel_manager_->RemoveResource(res);
             res->Destroy();
             free(res);
         }
         if(root_res->root_ref_ == 0)
         {
-            Channel::RemoveResource(res);
+            channel_manager_->RemoveResource(res);
             root_res->Destroy();
             free(root_res);
         }

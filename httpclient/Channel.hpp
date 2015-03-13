@@ -1,23 +1,21 @@
 #ifndef __CHANNEL_HPP
 #define __CHANNEL_HPP
 
+#include "linklist/linked_list.hpp"
 #include "linklist/linked_list_map.hpp"
 #include "SchedulerTypes.hpp"
 #include "TUtility.hpp"
-
+#include "lock/lock.hpp"
 /**
     由于HostChannel与ServChannel相互引用，
     确保加锁顺序：先加ServChannel锁，再加HostChannel锁
 **/
-
-class ServChannel; 
-class HostChannel
+class ServChannel;
+struct HostChannel
 {
-public:
     typedef linked_list_map<ResourcePriority, Resource, &Resource::queue_node_> ResWaitMap;
     typedef long long HostKey;
 
-protected:
     char protocal_; 
     unsigned short port_;
     std::string host_;
@@ -35,12 +33,6 @@ protected:
     time_t      update_time_;
     SpinLock    lock_;
 
-    /** static member **/
-    static HostCacheList * cache_lst_;
-    static SpinLock * cache_lock_; 
-    static unsigned cache_cnt_;
-
-public:
     HostChannel(char protocal, const std::string& host, unsigned port, 
     HostKey host_key, unsigned fetch_interval_ms): 
         protocal_(protocal), port_(port), host_(host), host_key_(host_key),
@@ -49,15 +41,11 @@ public:
     {}
 };
 
-typedef linked_list<HostChannel, &HostChannel::queue_node_> HostChannelList;
-typedef linked_list<HostChannel, &HostChannel::cache_node_> HostCacheList;
-
-class ServChannelList;
-class ServChannel
+typedef linked_list_t<HostChannel, &HostChannel::queue_node_> HostChannelList;
+struct ServChannel
 {
-public:
     //正在抓取的resource
-    typedef linked_list<Resource, &Resource::queue_node_> ResFetchingList; 
+    typedef linked_list_t<Resource, &Resource::queue_node_> ResFetchingList; 
     typedef long long ServKey;
     enum ConcurencyMode
     {
@@ -78,7 +66,6 @@ public:
     static const double DEFAULT_MAX_ERR_RATE = 0.8;
     static const ConcurencyMode DEFAULT_CONCURENCY_MODE = CONCURENCY_PER_SERV;
 
-protected:
     //统计错误率
     StasticCount<double, 10> err_rate_;
     //记录最近的抓取时间
@@ -112,15 +99,9 @@ protected:
     //空闲的host列表
     HostChannelList idle_host_lst_;
 
-    /** static member **/
-    static ServCacheList * cache_lst_;
-    static SpinLock cache_lock_; 
-    static unsigned cache_cnt_;
-
-public:
     //fetch_interval_ms为抓取的间隔时间, 单位为毫秒
     ServChannel(struct addrinfo* ai, ServKey serv_key,
-        unsigned max_err_rate, unsigned concurency_mode, 
+        unsigned max_err_rate, ConcurencyMode concurency_mode, 
         struct sockaddr* local_addr);
 
     time_t GetReadyTime() const
@@ -172,30 +153,9 @@ public:
         return serv_key_;
     }
 };
-typedef linked_list<ServChannel, &ServChannel::queue_node_> ServChannelList;
-typedef linked_list<ServChannel, &ServChannel::cache_node_> ServCacheList;
 
-/*** function **/
-namespace Channel
-{
-    unsigned WaitResCnt(ServChannel* serv_channel);
-    unsigned WaitResCnt(HostChannel* host_channel);
-    ServChannel* SetServChannel(HostChannel*, ServChannel *);
-    void DestroyChannel(HostChannel* host_channel);
-    void DestroyChannel(ServChannel* serv_channel);
-    void AddResource(HostChannel* host_channel, Resource* res);
-    inline unsigned GetHostCacheSize(unsigned cnt);
-    inline unsigned GetServCacheSize(unsigned cnt);
-    HostCacheList PopHostCache(unsigned cnt);
-    ServCacheList PopServCache(unsigned cnt);
-    void SetFetchIntervalMs(HostChannel*, unsigned);
-    void RemoveResource(HostChannel*, Resource*);
-    Resource* PopResource(HostChannel* host_channel);
-    Resource* PopResource(ServChannel* serv_channel);
-    Resource* PopAvailableResource(ServChannel* serv_channel);
-    std::string ToString(HostChannel* host_channel) const;
-    bool ConnectionAvailable(ServChannel* serv_channel);
-    bool InitializeCache();
-    bool DestroyCache();
-}
+typedef linked_list_t<ServChannel, &ServChannel::cache_node_> ServCacheList;
+typedef linked_list_t<HostChannel, &HostChannel::cache_node_> HostCacheList;
+
+Connection* create_connection(struct sockaddr*);
 #endif

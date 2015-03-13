@@ -21,7 +21,9 @@
 #define  __TREDIRECTCHECKER_INC
 
 #include <string>
+#include <boost/shared_ptr.hpp>
 #include "httpparser/HttpMessage.hpp"
+#include "SchedulerTypes.hpp"
 
 struct RedirectInfo
 {

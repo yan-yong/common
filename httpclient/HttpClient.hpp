@@ -87,4 +87,5 @@ private:
     time_t cur_time_;
     bool stopped_;
     pthread_t tid_;
+    ChannelManager* channel_manager_;
 }

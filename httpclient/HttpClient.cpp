@@ -2,6 +2,7 @@
 #include <boost/shared_ptr.hpp>
 #include "lock/lock.hpp"
 #include "TRedirectChecker.hpp"
+#include "ChannelManager.hpp"
 
 static FETCH_FAIL_GROUP __srv_error_group(int error) 
 {
@@ -20,7 +21,8 @@ HttpClient::HttpClient(size_t max_conn_size,
     fetcher_.reset(new ThreadingFetcher(this));
     storage_.reset(new Storage());
     dns_resolver_.reset(new DnsResolver());
-    pthread_create(&tid_, NULL, RunThread); 
+    pthread_create(&tid_, NULL, RunThread);
+    channel_manager_ = ChannelManager::Instance();
 }
 
 void* HttpClient::RunThread(void *context) 
@@ -78,7 +80,7 @@ void HttpClient::HandleDnsResult(std::string err_msg, struct addrinfo* ai, const
 {
     HostChannel *host_channel = (HostChannel*)contex;
     ServChannel* serv_channel = storage_->AcquireServChannel(ai);
-    Channel::SetServChannel(host_channel, serv_channel);
+    channel_manager_->SetServChannel(host_channel, serv_channel);
     if(!serv_channel->queue_node_.empty())
         __fetch_serv(serv_channel); 
 }
@@ -239,7 +241,8 @@ time_t HttpClient::__update_curent_time()
  **/
 void HttpClient::__fetch_serv(ServChannel* serv)
 {
-    while(Channel::WaitResCnt(serv) && Channel::ConnectionAvailable(serv))
+    while(channel_manager_->WaitResCnt(serv) && 
+        channel_manager_->ConnectionAvailable(serv))
     {
         if(fetcher_->IsOverload())
         {
@@ -253,7 +256,7 @@ void HttpClient::__fetch_serv(ServChannel* serv)
             wait_lst_map_[ready_time].add_tail(*serv);
             break;
         }
-        Resource* res = Channel::PopAvailableResource(serv);
+        Resource* res = channel_manager_->PopAvailableResource(serv);
         __fetch_res(res);
         serv->SetFetchTime(cur_time_);
     }
@@ -284,7 +287,7 @@ time_t HttpClient::__handle_wait_list()
         if(timeout > cur_time_)
             return timeout - cur_time_;
         wait_lst_map_.pop_front();
-        if(!Channel::WaitResCnt(serv_channel))
+        if(!channel_manager_->WaitResCnt(serv_channel))
             continue;
         __fetch_serv(serv);
     }
@@ -352,7 +355,7 @@ void HttpClient::ProcessResult(RawFetcherResult& fetch_result)
     IFetchMessage *resp = fetch_result.message;
     assert(res);
     fetcher_->CloseConnection(res->conn);
-    Channel::ReleaseConnection(res);
+    channel_manager_->ReleaseConnection(res);
     ServChannel * serv = res->serv_;
     HostChannel * host = res->host_;
     int err_num = fetch_result.err_num;

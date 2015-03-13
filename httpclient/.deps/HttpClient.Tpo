@@ -665,13 +665,13 @@ HttpClient.lo: HttpClient.cpp HttpClient.hpp \
  /usr/lib/gcc/x86_64-redhat-linux/4.4.7/../../../../include/c++/4.4.7/bits/stl_multiset.h \
  /usr/lib/gcc/x86_64-redhat-linux/4.4.7/../../../../include/c++/4.4.7/bitset \
  /usr/lib/gcc/x86_64-redhat-linux/4.4.7/../../../../include/c++/4.4.7/complex \
- ../singleton/Singleton.h ../utility/murmur_hash.h \
+ ../singleton/Singleton.h ../utility/murmur_hash.h ChannelManager.hpp \
  ../dnsresolver/DNSResolver.hpp \
  /home/proxy_spider/common/dependency/include/event2/dns.h \
  /home/proxy_spider/common/dependency/include/event2/util.h \
  /home/proxy_spider/common/dependency/include/event2/event-config.h \
  /home/proxy_spider/common/dependency/include/event2/event.h \
- TRedirectChecker.hpp
+ TRedirectChecker.hpp SchedulerTypes.hpp ChannelManager.hpp
 
 HttpClient.hpp:
 
@@ -2169,6 +2169,8 @@ Storage.hpp:
 
 ../utility/murmur_hash.h:
 
+ChannelManager.hpp:
+
 ../dnsresolver/DNSResolver.hpp:
 
 /home/proxy_spider/common/dependency/include/event2/dns.h:
@@ -2180,3 +2182,7 @@ Storage.hpp:
 /home/proxy_spider/common/dependency/include/event2/event.h:
 
 TRedirectChecker.hpp:
+
+SchedulerTypes.hpp:
+
+ChannelManager.hpp:

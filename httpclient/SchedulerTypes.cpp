@@ -1,9 +1,10 @@
-#include <boost/function.hpp>
+#include <openssl/md5.h>
 #include <assert.h>
+#include <boost/function.hpp>
 #include "SchedulerTypes.hpp"
 #include "utility/net_utility.h"
-#include <openssl/md5.h>
 #include "log/log.h"
+#include "Channel.hpp"
 
 const char* BatchConfig::DEFAULT_USER_AGENT = "Mozilla/5.0 (Windows NT 6.1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/31.0.1650.63 Safari/537.36 SE 2.X MetaSr 1.0";
 const char* BatchConfig::DEFAULT_BATCH_ID   = "default";
@@ -173,7 +174,7 @@ std::string Resource::GetUrl() const
 URI Resource::GetURI() const
 {
     URI uri;
-    std::string url = Channel::GetUrl();
+    std::string url = this->GetUrl();
     UriParse(url.c_str(), url.length(), uri);
     HttpUriNormalize(uri);
     return uri;
@@ -188,7 +189,7 @@ void Resource::Destroy()
     }
     Resource* root_res = RootResource(); 
     if(is_redirect_)
-        root_res->root_ref -= 1;
+        root_res->root_ref_ -= 1;
     if(has_user_headers_)
     {
         //delete ((ResExtend*)extend_)->user_headers_;
