@@ -45,7 +45,7 @@ public:
         return __get(key);
     }
 
-    bool empty(const K& key) const 
+    bool empty(const K& key)
     {
         ListPtr p_lst = __get(key);
         if(!p_lst)
@@ -58,11 +58,11 @@ public:
         return false; 
     }
 
-    bool empty() const 
+    bool empty()
     {
         if(Base::empty())
             return true;
-        for(typename Base::iterator it = begin(); it != end(); )
+        for(typename Base::iterator it = Base::begin(); it != Base::end(); )
         {
             if(!it->second->empty())
                 return false;
@@ -106,7 +106,11 @@ public:
     bool del(T &node)
     {
         if(List::del(node))
+        {
             cur_cnt_--;
+            return true;
+        }
+        return false;
     }
 
     size_t size() const
@@ -116,20 +120,20 @@ public:
 
     void get_front(K& key, T* & t)
     {
-        typename Base::iterator it = begin();
-        while(it != end() && it->second->empty())
+        typename Base::iterator it = Base::begin();
+        while(it != Base::end() && it->second->empty())
             erase(it);
-        assert(it != end());
+        assert(it != Base::end());
         key = it->first;
         t   = it->second->get_front(); 
     }
 
     void get_back(K& key, T* & t)
     {
-        typename Base::iterator it = rbegin();
-        while(it != rend() && it->second->empty())
+        typename Base::iterator it = Base::rbegin();
+        while(it != Base::rend() && it->second->empty())
             erase(it);
-        assert(it != rend());
+        assert(it != Base::rend());
         key = it->first;
         t   = it->second->get_back(); 
     }
@@ -137,9 +141,9 @@ public:
     void pop_front()
     {
         typename Base::iterator it = this->begin();
-        while(it != end() && it->second->empty())
+        while(it != Base::end() && it->second->empty())
             erase(it);
-        assert(it != end())
+        assert(it != Base::end());
         it->second->pop_front();
         if(it->second->empty())
             this->erase(it);
@@ -147,13 +151,13 @@ public:
 
     void pop_back()
     {
-        typename Base::iterator it = rbegin();
-        while(it != rend() && it->second->empty())
+        typename Base::iterator it = Base::rbegin();
+        while(it != Base::rend() && it->second->empty())
             erase(it);
-        assert(it != rend());
+        assert(it != Base::rend());
         it->second->pop_back();
         if(it->second->empty())
-            this->erase(it);
+            Base::erase(it);
     }
 };
 

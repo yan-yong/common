@@ -3,7 +3,6 @@
 #include <queue>
 #include <map>
 #include <list>
-#include <pthread>
 #include <boost/shared_ptr.hpp>
 #include <boost/function.hpp>
 #include <boost/bind.hpp>
@@ -12,7 +11,7 @@
 #include "queue/CQueue.h"
 #include "linklist/linked_list.hpp"
 #include "linklist/linked_list_map.hpp"
-#include "ServChannel.hpp"
+#include "Channel.hpp"
 #include "Storage.hpp"
 #include "dnsresolver/DNSResolver.hpp"
 
@@ -88,4 +87,5 @@ private:
     time_t cur_time_;
     bool stopped_;
     pthread_t tid_;
+    ChannelManager* channel_manager_;
 }

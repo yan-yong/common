@@ -26,6 +26,9 @@
 // STD C++ headers
 #include <string>
 #include <vector>
+#include "httpparser/HttpMessage.hpp"
+
+#define PAGE_DIGEST_LEN 8
 
 // Forward declares
 class Response;
@@ -53,7 +56,7 @@ class StasticCount
     T val_array[count];
     unsigned idx_;
 public:
-    StasticCount(): res_(T()), idx_(0)
+    StasticCount(): sum_(T()), idx_(0)
     {
         assert(count > 0);
         for(int i = 0; i < count; i++)
@@ -64,9 +67,9 @@ public:
         idx_ = idx_++ % count;
         sum_ -= val_array[idx_]; 
         val_array[idx_] = val;
-        sum += val;
+        sum_ += val;
     }
-    T Average()
+    T Average() const
     {
         return sum_ / count; 
     }
@@ -111,7 +114,7 @@ bool noneEmptyStr(const char * str);
 void tolower(std::string &str);
 
 /// \return true if response is HTML page
-bool isHtml(const Http::Response& response);
+bool isHtml(const Response& response);
 
 /// If 'range' is byte-range or content_length == 0, do nothing;
 /// If 'range' is suffix-range, convert it to a byte-range.
@@ -125,10 +128,10 @@ bool is_range_valid(std::string& range);
 /// Return the length of the whole resource this header says,
 /// that is, if this a response of 'Range' req, we return the length of the
 /// whole resource, not the Range length.
-size_t getContentWholeLength(const Http::MessageHeaders &headers);
+size_t getContentWholeLength(const MessageHeaders &headers);
 
 /// Return the value of 'Content-Length'
-size_t getContentLength(const Http::MessageHeaders &headers);
+size_t getContentLength(const MessageHeaders &headers);
 
 /// Get host name of ip,
 /// @param flag @see man getnameinfo
@@ -136,7 +139,7 @@ std::string getHostName(const char *ip, int flag);
 // remove space, nonprint char, \r or \n in end of line.
 char * chomp(char *line);
 bool hasCRLF(const char *str);
-bool getRedirectUrl(const Http::MessageHeaders &headers, std::string &to);
+bool getRedirectUrl(const MessageHeaders &headers, std::string &to);
 bool mergeUrl(const URI &from, const std::string &to_url, URI &result);
 
 #endif

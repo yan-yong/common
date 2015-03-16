@@ -146,14 +146,14 @@ class Fetcher {
 	 *	    可以在此句柄上再发起请求
 	 *  - 何时FreeConnection由客户控制，但注意别发生资源泄漏。
 	 */
-	Connection * CreateConnection(
+	static Connection * CreateConnection(
 		int scheme,
 		int socket_family,
 		int socket_type,
 		int protocol,
 		const FetchAddress& address
 		);
-	void FreeConnection(Connection *conn);
+	static void FreeConnection(Connection *conn);
 	void CloseConnection (Connection *conn);
 
 	/**
@@ -221,14 +221,14 @@ class ThreadingFetcher : IFetcherEvents {
     public:
  	ThreadingFetcher(IMessageEvents *message_events);
 	virtual ~ThreadingFetcher();
-	Connection * CreateConnection(
+	static Connection * CreateConnection(
 		int scheme,
 		int socket_family,
 		int socket_type,
 		int protocol,
 		const FetchAddress& address
 		);
-	void FreeConnection(Connection *conn);
+	static void FreeConnection(Connection *conn);
 	void CloseConnection (Connection *conn);
 
 	int Begin(const Fetcher::Params& params);

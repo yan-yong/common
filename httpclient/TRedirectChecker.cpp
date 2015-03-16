@@ -18,18 +18,15 @@
 
 #include <pthread.h>
 #include <stdio.h>
-
+#include <string>
 #include "TRedirectChecker.hpp"
 #include "httpparser/URI.hpp"
 #include "httpparser/olduri.h"
 #include "httpparser/HttpMessage.hpp"
 #include "httpparser/hlink.h"
-#include "httpparser/script.h"
 #include "TUtility.hpp"
 
-#include "ScheduleKernelTypes.hpp"
-
-static pthread_mutex_t sr_mutex = PTHREAD_MUTEX_INITIALIZER;
+//static pthread_mutex_t sr_mutex = PTHREAD_MUTEX_INITIALIZER;
 boost::shared_ptr < TRedirectChecker > TRedirectChecker::instance_;
 
 boost::shared_ptr < TRedirectChecker > &TRedirectChecker::instance() 
@@ -120,7 +117,7 @@ class TRedirectChecker::Impl
             }
         }
 
-        bool readResult(const string & from, const char *result_line,
+        bool readResult(const std::string & from, const char *result_line,
                 std::string & result) 
         {
             char *from_url = NULL, *redirect = NULL, *to_url =
@@ -206,10 +203,12 @@ TRedirectChecker::~TRedirectChecker()
     delete impl_;
 }
 
+#if 0
 bool TRedirectChecker::checkScriptRedirect(const std::string & from, const Response & resp, std::string & result) 
 {
     return impl_->checkScriptRedirect(from, resp, result);
 }
+#endif
 
 bool TRedirectChecker::checkMetaRedirect(const std::string & from, const Response & resp, std::string & result) 
 {

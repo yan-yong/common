@@ -11,7 +11,7 @@
 #include <sys/socket.h>
 #include <errno.h>
 #include <stdint.h>
-#include "Http.hpp"
+#include "httpparser/Http.hpp"
 #include "FetchProtocal.hpp"
 
 enum
@@ -23,19 +23,19 @@ enum
 #define protocal2str(protocal) (protocal == PROTOCOL_HTTPS ? "https":"http");
 #define str2protocal(scheme)   (scheme == "https" ? PROTOCOL_HTTPS:PROTOCOL_HTTP)
 
-class HttpFetcherRequest : public FetcherRequest, public Http::Request
+class HttpFetcherRequest : public FetcherRequest, public Request
 {
     public:
 	virtual ~HttpFetcherRequest(){};
 	virtual void Clear()
 	{   
 	    FetcherRequest::Clear();
-	    Http::Request::Clear();
+	    Request::Clear();
 	}
 	virtual void Close();
 };
 
-class HttpFetcherResponse : public FetcherResponse, public Http::Response
+class HttpFetcherResponse : public FetcherResponse, public Response
 {
     public:
 	HttpFetcherResponse(

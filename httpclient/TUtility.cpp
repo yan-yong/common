@@ -15,7 +15,7 @@
  *
  * =====================================================================================
  */
-
+#include <stdio.h>
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <sys/socket.h>
@@ -24,14 +24,12 @@
 #include <arpa/inet.h>
 #include <errno.h>
 #include <openssl/md5.h>
-
-#include "ssdebug.h"
-#include "URI.hpp"
-#include "hlink.h"
-#include "Http.hpp"
-
-#include "TUtility.hpp"
 #include <iostream>
+#include "httpparser/URI.hpp"
+#include "httpparser/hlink.h"
+#include "httpparser/Http.hpp"
+#include "log/log.h"
+#include "TUtility.hpp"
 #include "httpparser/HttpMessage.hpp"
   
 void PageDigestToHex(const char page_digest[PAGE_DIGEST_LEN], std::string& result)
@@ -200,18 +198,18 @@ int ringIdxFromSubbatchSpecifer(const char * subbatch_specifer, const char *mirr
 bool taskValidation(const char *url, URI &uri)
 {
     if(!url){
-        SSLOG_WARNING("%s: task url is NULL", __FUNCTION__);
+        LOG_ERROR("%s: task url is NULL\n", __FUNCTION__);
         return false;
     }
 
     if (!UriParse(url, strlen(url), uri)){
-        SSLOG_WARNING("%s: UriParse [%s] failed", __FUNCTION__,
+        LOG_ERROR("%s: UriParse [%s] failed\n", __FUNCTION__,
                 url);
         return false;
     }
 
     if(!HttpUriNormalize(uri)) {
-        SSLOG_WARNING("%s: HttpUriNormalize [%s] failed", __FUNCTION__,
+        LOG_ERROR("%s: HttpUriNormalize [%s] failed\n", __FUNCTION__,
                 url);
         return false;
     }
@@ -232,7 +230,7 @@ void tolower(std::string &str)
     }
 }
 
-bool isHtml(const Http::Response& response)
+bool isHtml(const Response& response)
 {
     int index = response.Headers.Find("Content-Type");
     if (index >= 0)
@@ -360,7 +358,7 @@ bool is_range_valid(std::string& range)
     return true;
 }
 
-size_t getContentLength(const Http::MessageHeaders &headers)
+size_t getContentLength(const MessageHeaders &headers)
 {
     int index = headers.Find("Content-Length");
     if(index >=0){
@@ -368,7 +366,7 @@ size_t getContentLength(const Http::MessageHeaders &headers)
     }
     return 0;
 }
-size_t getContentWholeLength(const Http::MessageHeaders &headers)
+size_t getContentWholeLength(const MessageHeaders &headers)
 {
     int index = headers.Find("Content-Range");
     if(index >= 0){
@@ -396,14 +394,14 @@ std::string getHostName(const char *ip, int flag)
     sa.sin_family = AF_INET;
     sa.sin_port = 0;
     if(inet_aton(ip, &sa.sin_addr) == 0){
-        SSLOG_ERROR("%s: inet_aton errno == %d, %s", __FUNCTION__, 
+        LOG_ERROR("%s: inet_aton errno == %d, %s\n", __FUNCTION__, 
                 errno, strerror(errno));
         return "";
     }
 
     if(getnameinfo((sockaddr*)&sa, sizeof(sa), host, sizeof(host),
                 NULL, 0, flag)){
-        SSLOG_ERROR("%s: getnameinfo errno == %d, %s", __FUNCTION__, 
+        LOG_ERROR("%s: getnameinfo errno == %d, %s\n", __FUNCTION__, 
                 errno, strerror(errno));
         return "";
     }
@@ -459,7 +457,7 @@ bool hasCRLF(const char *str)
     return false;
 }
 
-bool getRedirectUrl(const Http::MessageHeaders &headers, std::string &to)
+bool getRedirectUrl(const MessageHeaders &headers, std::string &to)
 {
     // find location
     int index = headers.Find("Location");

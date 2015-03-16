@@ -10,7 +10,7 @@
 
 uint16_t GetHttpDefaultPort(int protocol)
 {
-    switch(protocal)
+    switch(protocol)
     {
         case PROTOCOL_HTTP:
             return HTTP_DEFAULT_PORT;
@@ -23,7 +23,7 @@ uint16_t GetHttpDefaultPort(int protocol)
 
 bool IsHttpDefaultPort(int protocol, uint16_t port)
 {
-    IsHttpDefaultPort(protocol) == port;
+    return GetHttpDefaultPort(protocol) == port;
 }
 
 void HttpFetcherRequest::Close()
@@ -97,9 +97,9 @@ int HttpFetcherResponse::AppendBody(const void *buf, size_t length)
 	    const void* data;
 	    size_t data_size = 0;
 	    size_t parsed_size = 0;
-	    while ((parsed_size = Http::ExtractChunkedData(begin, size, data, data_size)) > 0)
+	    while ((parsed_size = ExtractChunkedData(begin, size, data, data_size)) > 0)
 	    {
-		Http::Response::AppendBody(data, data_size);
+		Response::AppendBody(data, data_size);
 		begin += parsed_size;
 		size -= parsed_size;
 		parsed = true;
@@ -114,7 +114,7 @@ int HttpFetcherResponse::AppendBody(const void *buf, size_t length)
     }
     else
     {
-	Http::Response::AppendBody(buf, length);
+	Response::AppendBody(buf, length);
 	if ((int)Body.size() == m_ContentLength)
 	    return 0;
     }
@@ -127,7 +127,7 @@ int HttpFetcherResponse::__Append(const void *buf, size_t length)
     m_DumpResponseData.append((const char*)buf, length);
     if (length == 0)
     {
-	if (Http::Response::Empty())
+	if (Response::Empty())
 	{
 	    errno = ECONNRESET;
 	    return -1;
@@ -138,13 +138,13 @@ int HttpFetcherResponse::__Append(const void *buf, size_t length)
 
     const char* data = reinterpret_cast<const char*>(buf);
     // header not acquired
-    if (Http::Response::Empty())
+    if (Response::Empty())
     {
 	size_t parsed_size = 0;
 	// first time
 	if (m_UnparsedData.empty())
 	{
-	    parsed_size = Http::ParseResponse(data, length, *this);
+	    parsed_size = ParseResponse(data, length, *this);
 	    if (!parsed_size)
 		m_UnparsedData.assign(data, length);
 	}
@@ -152,10 +152,10 @@ int HttpFetcherResponse::__Append(const void *buf, size_t length)
 	{
 	    // merge previous data
 	    m_UnparsedData.append(data, length);
-	    parsed_size = Http::ParseResponse(m_UnparsedData.data(), m_UnparsedData.length(), *this);
+	    parsed_size = ParseResponse(m_UnparsedData.data(), m_UnparsedData.length(), *this);
 	}
 
-	if (!Http::Response::Empty())
+	if (!Response::Empty())
 	{
 	    m_HeadersSize = parsed_size - Body.size();
 	    m_UnparsedData.clear();
@@ -235,7 +235,7 @@ int HttpFetcherResponse::ContentEncoding(char error_msg[50]) {
     std::vector<char> buffer;
     if (Headers[index].Value == "gzip")
     {   
-	if (Http::GzipUncompress(&Body[0], Body.size(), buffer) == 0) {
+	if (GzipUncompress(&Body[0], Body.size(), buffer) == 0) {
 	    std::swap(buffer, Body);
 	    return 0;
 	}
@@ -244,7 +244,7 @@ int HttpFetcherResponse::ContentEncoding(char error_msg[50]) {
     }    
     else if(Headers[index].Value == "deflate")
     {    
-	if (Http::DeflateUncompress(&Body[0], Body.size(), buffer) == 0){
+	if (DeflateUncompress(&Body[0], Body.size(), buffer) == 0){
 	    std::swap(buffer, Body);
 	    return 0;
 	}

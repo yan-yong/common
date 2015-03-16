@@ -9,10 +9,10 @@
 #include <boost/function.hpp>
 
 // From spider_kernel
-#include <rbtree.h>
-#include <list.h>
 #include "httpparser/URI.hpp"
+#include "httpparser/HttpMessage.hpp"
 #include "linklist/linked_list.hpp"
+#include "fetcher/Fetcher.hpp"
 
 enum ResourcePriority 
 {
@@ -128,7 +128,8 @@ inline const char* GetRedirectTypeName(REDIRECT_TYPE type)
   return "INVALID";
 }
 
-class ServChannel, HostChannel;
+class ServChannel;
+class HostChannel;
 
 struct BatchConfig
 {
@@ -192,55 +193,14 @@ public:
     std::string GetHostWithPort() const;
     std::string GetUrl() const;
     URI GetURI() const;
-
-	int GetProtocol() const 
-    {
-        return protocal_;
-    }
-	uint16_t GetPort() const
-    {
-        return port_;
-    }
-    HostChannel* GetHostChannel() const
-    {
-        return host_;
-    }
-    ServChannel* GetServChannel() const
-    {
-        return serv_;
-    }
-    bool ExceedMaxRetryNum() const
-    {
-        return cur_retry_times_ > cfg_.max_retry_times_; 
-    }
-    time_t GetTimeoutStamp() const
-    {
-        if(!cfg_->timeout_sec_)
-            return 0;
-        return cfg_->timeout_sec_ + arrive_time_/1000;
-    }
-
-    /****** redirect relavance ******/
-    bool ReachMaxRedirectNum() const
-    {
-        return RedirectCount() >= cfg_.max_redirect_times_;
-    }
-    Resource* RootResource() const
-    {
-        if(!is_redirect_)
-            return this; 
-        return ((ResExtend*)extend_)->root_res_;
-    }
-    std::string RootUrl() const
-    {
-        return RootResource()->GetUrl();
-    }
-    unsigned RedirectCount() const
-    {
-        if(!is_redirect_)
-            return 0;
-        return ((ResExtend*)extend_)->cur_redirect_times_;
-    }
+    int GetProtocol() const;
+    uint16_t GetPort() const;
+    bool ExceedMaxRetryNum() const;
+    time_t GetTimeoutStamp() const;
+    bool ReachMaxRedirectNum() const;
+    Resource* RootResource() const;
+    std::string RootUrl() const;
+    unsigned RedirectCount() const;
 
 public:
     //是否有自定义头
@@ -270,9 +230,6 @@ struct ResExtend
     unsigned        cur_redirect_times_;
 };
 
-const char* GetFetchErrorGroupName(int gid);
-const char* GetSpiderError(int code);
-const char* GetSpiderError(FETCH_ERROR code);
 struct FetchErrorType
 {
     public:
@@ -288,6 +245,9 @@ struct FetchErrorType
         FETCH_FAIL_GROUP error_group_;
         int error_num_;
 };
+const char* GetFetchErrorGroupName(int gid);
+const char* GetSpiderError(int code);
+const char* GetSpiderError(FETCH_ERROR code);
 
 inline time_t current_time_ms()
 {

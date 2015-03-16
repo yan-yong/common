@@ -1,12 +1,13 @@
 #ifndef __STORAGE_HPP
 #define __STORAGE_HPP
 
-#include <boost/unordered_map>
+#include <boost/unordered_map.hpp>
 #include "singleton/Singleton.h"
-#include "Channel.h"
+#include "Channel.hpp"
 #include "lock/lock.hpp"
 #include "utility/murmur_hash.h"
 #include "linklist/linked_list.hpp"
+#include "ChannelManager.hpp"
 
 /*
 * Storage负责：
@@ -49,8 +50,9 @@ class Storage
     size_t   host_cache_max_; 
     size_t   serv_cache_max_;
     bool     close_;
+    ChannelManager* channel_manager_;
 
-    ServKey __aigetkey(const struct addrinfo *addrinfo, socekaddr* local_addr) 
+    ServKey __aigetkey(const struct addrinfo *addrinfo, char scheme, socekaddr* local_addr) 
     {
         const struct addrinfo *sorted[ADDRINFO_MAX];
         const struct addrinfo *p;
@@ -78,7 +80,7 @@ class Storage
         if(local_addr)
             MD5_Update(&ctx, local_addr, sizeof(struct sockaddr)); 
         MD5_Final(digest, &ctx);
-        return *(ServKey *)digest;
+        return *(ServKey *)digest + scheme;
     }
 
     HostKey __hostgetkey(const std::string& host, 
@@ -102,14 +104,14 @@ class Storage
             unsigned delete_cnt = EXCEED_DELETE_RATE * serv_cache_cnt;
             if(!delete_cnt)
                 delete_cnt = 1;
-            HostCacheList cache_lst = PopHostCache(delete_cnt);
+            HostCacheList cache_lst = channel_manager_->PopHostCache(delete_cnt);
             HostChannel * cur_host = NULL;
             while(!cache_lst.empty())
             {
                 cur_host = cache_lst.get_front();
                 cache_lst.pop_front();
                 host_map_.erase(cur_host->GetHostKey());
-                Destroy(cur_host);
+                channel_manager_->DestroyChannel(cur_host);
             }
         }
         //check serv cache limit
@@ -120,14 +122,14 @@ class Storage
             unsigned delete_cnt = EXCEED_DELETE_RATE * serv_cache_cnt;
             if(!delete_cnt)
                 delete_cnt = 1;
-            ServCacheList cache_lst = PopServCache(delete_cnt);
+            ServCacheList cache_lst = channel_manager_->PopServCache(delete_cnt);
             ServChannel *cur_serv = NULL;
             while(!cache_lst.empty())
             {
                 cur_serv = cache_lst.get_front();
                 cache_lst.pop_front();
                 serv_map_.erase(cur_serv->GetServKey());
-                Destroy(cur_serv);
+                channel_manager_->DestroyChannel(cur_serv);
             }
         }
     } 
@@ -136,7 +138,7 @@ public:
     Storage(size_t host_cache_max = MAX_CACHE_HOST, size_t serv_cache_max = MAX_CACHE_SERV):
         host_cache_max_(host_cache_max), serv_cache_max_(serv_cache_max), close_(false)
     {
-        InitializeCache();
+        channel_manager_ = ChannelManager::Instance();
     }
 
     ~Storage()
@@ -146,13 +148,13 @@ public:
             it != serv_map_lock_.end(); )
         {
             ServChannel* serv_channel = it->second;
-            while(WaitResCnt(serv_channel))
+            while(channel_manager_->WaitResCnt(serv_channel))
             {
-                Resource * res = PopResource(serv_channel);
-                FreeResource(res);
+                Resource * res = channel_manager_->PopResource(serv_channel);
+                free(res);
             }
             serv_map_lock_.erase(it++);
-            delete serv_channel;
+            channel_manager_->DestroyChannel(serv_channel);
         }
  
         WriteGuard guard(host_map_lock_);
@@ -161,9 +163,8 @@ public:
         {
             HostChannel * host_channel = it->first;
             host_map_lock_.erase(it++);
-            delete host_channel;
+            channel_manager_->DestroyChannel(serv_channel);
         }
-        DestroyCache(); 
     }
 
     void Close() 
@@ -216,12 +217,13 @@ public:
     }
 
     ServChannel* AcquireServChannel(
-        struct addrinfo* ai, 
+        struct addrinfo* ai,
+        char   scheme,
         struct sockaddr* local_addr = NULL,
         ServChannel::ConcurencyMode concurency_mode = ServChannel::DEFAULT_CONCURENCY_MODE, 
-        unsigned max_err_rate = ServChannel::DEFAULT_MAX_ERR_RATE )
+        double max_err_rate = ServChannel::DEFAULT_MAX_ERR_RATE )
     {
-        ServKey serv_key = __aigetkey(ai, local_addr); 
+        ServKey serv_key = __aigetkey(ai, scheme, local_addr); 
         {
             ReadGuard guard(serv_map_lock_);
             ServMap::iterator it = serv_map_.find(serv_key); 
@@ -230,8 +232,8 @@ public:
         }
 
         WriteGuard guard(serv_map_lock_);
-        ServChannel* serv_channel = new ServChannel(ai, serv_key, 
-            max_err_rate, concurency_mode, local_addr);
+        ServChannel* serv_channel = channel_manager_->CreateServChannel(scheme, ai, 
+            serv_key, max_err_rate, concurency_mode, local_addr);
         serv_map_.insert(ServChannel::value_type(serv_key, serv_channel));
         return serv_channel;
     }
@@ -248,13 +250,13 @@ public:
     HostChannel* AcquireHostChannel(const URI& uri)
     {
         const std::string& host = uri.GetHost();
-        const std::string& scheme = uri.GetScheme();
-        assert(scheme == "http" || scheme == "https");
-        char protocal = str2protocal(scheme);
-        uint16_t port = GetHttpDefaultPort(protocal);
+        const std::string& scheme_str = uri.GetScheme();
+        assert(scheme_str == "http" || scheme_str == "https");
+        char scheme = str2protocal(scheme_str);
+        uint16_t port = GetHttpDefaultPort(scheme);
         if(uri.HasPort())
             port = (uint16_t)atoi(uri.GetPort().c_str());
-        HostKey host_key = __hostgetkey(host, scheme, port);
+        HostKey host_key = __hostgetkey(host, scheme_str, port);
 
         {
             ReadGuard guard(host_map_lock_);
@@ -264,8 +266,8 @@ public:
         }
         unsigned fetch_interval = GetHostSpeed(host);
         WriteGuard guard(host_map_lock_);
-        HostChannel* host_channel = new HostChannel(protocal, host, port, 
-            host_key, fetch_interval);
+        HostChannel* host_channel = channel_manager_->CreateHostChannel(
+            scheme, host, port, host_key, fetch_interval);
         host_map_[host_key] = host_channel;
         return host_channel;
     }
@@ -317,7 +319,7 @@ public:
                 suffix += "?" + uri.Query();
             res->Initialize(host_channel, suffix, prior, contex, 
                 user_headers, root_res, batch_cfg);
-            AddResource(host_channel, res);
+            channel_manager_->AddResource(host_channel, res);
             return res;
         }
         return NULL; 
@@ -330,13 +332,13 @@ public:
         //如果资源被重定向资源所引用，则不能删除
         if(res->root_ref_ == 0)
         {
-            Channel::RemoveResource(res);
+            channel_manager_->RemoveResource(res);
             res->Destroy();
             free(res);
         }
-        if(root_res->root_ref_ == 0)
+        if(root_res != res && root_res->root_ref_ == 0)
         {
-            Channel::RemoveResource(res);
+            channel_manager_->RemoveResource(res);
             root_res->Destroy();
             free(root_res);
         }

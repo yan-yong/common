@@ -162,3 +162,18 @@ bool get_addr_string(const struct sockaddr* addr, char* addrstr, size_t addrstr_
     return true;
 }
 
+struct addrinfo* copy_addrinfo(struct addrinfo* addr)
+{
+    if(!addr)
+        return NULL;
+    unsigned sz = sizeof(struct addrinfo);
+    if(addr->ai_family == AF_INET)
+        sz += sizeof(struct sockaddr_in);
+    else
+        sz += sizeof(struct sockaddr_in6);
+    struct addrinfo* cur_ai_copy = (struct addrinfo*)malloc(sz);
+    memset(cur_ai_copy, 0, sz);
+    cur_ai_copy->ai_addr = (struct sockaddr *)(cur_ai_copy + 1); 
+    memcpy(cur_ai_copy, addr, sz);
+    return cur_ai_copy;
+}

@@ -22,6 +22,11 @@ _*
 *.swp
 *.Po
 deps
+<<<<<<< HEAD
+=======
+*.out
+*.Tpo
+>>>>>>> 59129cc70ed06b47b4e624596ac7b86298d20a79
 *.swm
 *.swo
 *.swk

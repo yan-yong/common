@@ -2,18 +2,12 @@ AC_INIT([common], [1.0.1.0], [yanyong@founder.com.cn])
 
 AM_INIT_AUTOMAKE([foreign])
 AC_PROG_CXX
+AC_PROG_SCONS
 AC_LANG([C++])
 AC_PROG_LIBTOOL
 
 BITS=`if [[ 64 -eq $(getconf LONG_BIT) ]]; then echo -n $(getconf LONG_BIT); fi`
 AC_SUBST(BITS)
-
-#ac_default_prefix=/home/yanyong/bloomfilter/httpserver/
-#includedir=include
-
-#boost_include=/usr/local/include
-#boost_lib=/usr/local/lib
-#AC_SUBST(boost_include)
 
 boost_path=/usr/local
 AC_SUBST(boost_path)
@@ -22,6 +16,17 @@ AC_ARG_WITH([boost_path],
 	    [
 	    	if test "x$withval" != "x";then
 			boost_path="$withval"
+		fi
+	    ],
+	    [])
+
+libev_path=/usr/local
+AC_SUBST(libev_path)
+AC_ARG_WITH([libev_path],
+	AS_HELP_STRING([--with-libev_path=PATH],[which should have 2 folders bellow: include lib (default is /usr/local)]),
+	    [
+	    	if test "x$withval" != "x";then
+			libev_path="$withval"
 		fi
 	    ],
 	    [])
@@ -77,5 +82,7 @@ AC_CONFIG_FILES([\
 	utility/Makefile
 	fetcher/Makefile
 	httpparser/Makefile
+	dnsresolver/Makefile
+	httpclient/Makefile
          ])
 AC_OUTPUT

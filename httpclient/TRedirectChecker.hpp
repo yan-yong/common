@@ -21,7 +21,9 @@
 #define  __TREDIRECTCHECKER_INC
 
 #include <string>
+#include <boost/shared_ptr.hpp>
 #include "httpparser/HttpMessage.hpp"
+#include "SchedulerTypes.hpp"
 
 struct RedirectInfo
 {
@@ -36,8 +38,9 @@ class TRedirectChecker
         /// @param to is the result of redirected.
         /// 
         /// @note assume page is HTML page.
-
+#if 0
         bool checkScriptRedirect(const std::string &from, const Response &resp, std::string &result);
+#endif
         bool checkMetaRedirect(const std::string &from, const Response &resp, std::string &result);
 
         TRedirectChecker();
