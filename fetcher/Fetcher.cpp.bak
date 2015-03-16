@@ -61,7 +61,7 @@ enum
     _CS_NTYPES
 };
 
-struct __connection
+struct __connection 
 {
     /*all connection we are visiting are arranged in a list*/
     struct list_head list;
@@ -83,6 +83,31 @@ struct __connection
     SSL *ssl;
 #endif
 };
+
+Connection* CreateConnection(struct sockaddr* dst_addr)
+{
+    Connection* conn = (Connection*)malloc(sizeof(Connection));
+    assert(conn);
+    INIT_LIST_HEAD(&conn->list);
+    conn->state = CS_CLOSED;
+    conn->error = 0;
+    conn->scheme = HTTP_SCHEME;
+    conn->sockfd = -1;
+    conn->message = NULL;
+    conn->socket_family = AF_INET;
+    conn->socket_type = SOCK_STREAM;
+    conn->protocol = 0;
+    conn->address.remote_addr = dst_addr;
+    conn->address.remote_addrlen = sizeof(struct sockaddr);
+    conn->address.local_addr = local_addr_;
+    if(!local_addr_)
+        conn->address.local_addrlen = 0;
+    else
+        conn->address.local_addrlen = sizeof(struct sockaddr);
+    conn->ssl = NULL;
+    conn->user_data = NULL;
+    return conn;
+}
 
 /*
  *  \return : maximum time of timeout milliseconds for epoll wait 
@@ -1038,11 +1063,11 @@ Connection* ThreadingFetcher::CreateConnection(
 		int protocol,
 		const FetchAddress& address
 		){
-    return Fetcher::CreateConnection(scheme, socket_family, socket_type, protocol, address);
+    return fetcher_->CreateConnection(scheme, socket_family, socket_type, protocol, address);
 }
 
 void ThreadingFetcher::FreeConnection(Connection *conn) {
-    Fetcher::FreeConnection(conn);
+    fetcher_->FreeConnection(conn);
 }
 
 void ThreadingFetcher::CloseConnection (Connection *conn) {
