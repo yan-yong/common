@@ -54,34 +54,32 @@ void HttpClient::UpdateBatchConfig(std::string& batch_id,
     storage_->UpdateBatchConfig(batch_id, cfg);
 }
 
-void HttpClient::ProcessSuccResult(Resource* res, IFetchMessage *message)
+void HttpClient::PutResult(FetchErrorType error, IFetchMessage *message, void* contex)
 {
-    ServChannel * serv = res->serv_;
-    serv->AddSucc();
-    if(suc_cb_)
-        suc_cb_(res, message);
+    if(result_cb_)
+        result_cb_(error, message, contex);
     else
     {
-        FetchErrorType fetch_ok(FETCH_FAIL_GROUP_OK, RS_OK);
-        boost::shared_ptr<FetchResult> result(new FetchResult(fetch_ok, message, res->contex_));
+        boost::shared_ptr<FetchResult> result(new FetchResult(error, message, contex));
         result_queue_.enqueue(result); 
     }
+}
+
+void HttpClient::ProcessSuccResult(Resource* res, IFetchMessage *message)
+{
+    FetchErrorType fetch_ok(FETCH_FAIL_GROUP_OK, RS_OK);
+    if(res->serv_)
+        res->serv_->AddSucc();
+    PutResult(fetch_ok, message, res->contex_);
 }
 
 void HttpClient::ProcessFailResult(FetchErrorType fetch_error, 
     Resource* res, IFetchMessage *message)
 {
-    ServChannel * serv = res->serv_;
-    if(serv)
-        serv->AddFail();
-    if(fail_cb_)
-        fail_cb_(fetch_error, res, message);
-    else
-    {
-        boost::shared_ptr<FetchResult> result(new FetchResult(fetch_error, 
-            message, res->contex_));
-        result_queue_.enqueue(result); 
-    }
+    if(res->serv_)
+        res->serv_->AddFail();
+    //TODO: add serv error operation
+    PutResult(fetch_error, message, res->contex_);
 }
 
 void HttpClient::HandleDnsResult(std::string err_msg, 
@@ -149,8 +147,8 @@ void HttpClient::HandleHttpResponse2xx(Resource* res, HttpFetcherResponse *resp)
         return;
     }
 
-    // Script redirect check
 #if 0
+    // Script redirect check
     if(doScriptRedirect(resp->Body.size())
         && TRedirectChecker::instance()->checkScriptRedirect(
         res->GetUrl(), *resp, ri.to_url))
@@ -441,8 +439,7 @@ void HttpClient::__pool()
     __handle_timeout_list();
 }
 
-void HttpClient::SetProcCallback(SucCallback suc_cb, FailCallback fail_cb)
+void HttpClient::SetResultCallback(ResultCallback call_cb)
 {
-    suc_cb_  = suc_cb;
-    fail_cb_ = fail_cb;
+    result_cb_ = call_cb;
 }

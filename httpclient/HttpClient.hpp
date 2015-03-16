@@ -1,3 +1,5 @@
+#ifndef __HTTP_CLIENT_HPP
+#define __HTTP_CLIENT_HPP
 #include <string>
 #include <vector>
 #include <queue>
@@ -16,29 +18,28 @@
 #include "dnsresolver/DNSResolver.hpp"
 #include "TRedirectChecker.hpp"
 
-struct FetchResult 
-{
-    FetchErrorType error_;
-    IFetchMessage * resp_;
-    void *        contex_;
-    
-    FetchResult(FetchErrorType error, IFetchMessage *resp, 
-        void* contex): 
-    error_(error), resp_(resp)
-    {}
-};
-
 class HttpClient: protected IMessageEvents
 {
-    static const unsigned DEFAULT_REQUEST_SIZE = 1000000;
-    static const unsigned DEFAULT_RESULT_SIZE  = 1000000;
+public:
+    struct FetchResult 
+    {
+        FetchErrorType error_;
+        IFetchMessage * resp_;
+        void *        contex_;
 
-    typedef linked_list_map<time_t, ServChannel, &ServChannel::queue_node_> ServWaitMap;
-    typedef linked_list_map<time_t, Resource, &Resource::timed_lst_node_> ResTimedMap;
+        FetchResult(FetchErrorType error, IFetchMessage *resp, void* contex): 
+            error_(error), resp_(resp), context_(contex)
+        {}
+    };
+    typedef boost::function<void (FetchErrorType, IFetchMessage*, void*)> ResultCallback;
     typedef boost::shared_ptr<FetchResult> ResultPtr;
     typedef CQueue<ResultPtr > ResultQueue;
-    typedef boost::function<void (Resource*, IFetchMessage*)> SucCallback;
-    typedef boost::function<void (FetchErrorType, Resource*, IFetchMessage*)> FailCallback;
+
+private:
+    static const unsigned DEFAULT_REQUEST_SIZE = 1000000;
+    static const unsigned DEFAULT_RESULT_SIZE  = 1000000;
+    typedef linked_list_map<time_t, ServChannel, &ServChannel::queue_node_> ServWaitMap;
+    typedef linked_list_map<time_t, Resource, &Resource::timed_lst_node_> ResTimedMap;
 
 private:
     void __pool();
@@ -51,40 +52,41 @@ private:
     REDIRECT_TYPE __get_redirect_type(int status_code);
 
 protected:
-    virtual struct RequestData* CreateRequestData(void * request_context);
-    virtual void FreeRequestData(struct RequestData * request_data);
-    virtual IFetchMessage* CreateFetchResponse(const FetchAddress& address, void * request_context);
-    virtual void FreeFetchMessage(IFetchMessage *fetch_message);
+    static  void* RunThread(void *context);
+    void UpdateBatchConfig(std::string&, const BatchConfig&);
+    void PutResult(FetchErrorType, IFetchMessage*, void*);
+    virtual struct RequestData* CreateRequestData(void *);
+    virtual void FreeRequestData(struct RequestData *);
+    virtual IFetchMessage* CreateFetchResponse(const FetchAddress&, void *);
+    virtual void FreeFetchMessage(IFetchMessage *);
 
-    void UpdateBatchConfig(std::string& batch_id, const BatchConfig&);
-    virtual void ProcessResult(RawFetcherResult& result);
+    virtual void ProcessResult(RawFetcherResult&);
     virtual void ProcessSuccResult(Resource*, IFetchMessage*);
     virtual void ProcessFailResult(FetchErrorType, Resource*, IFetchMessage*);
+    virtual void HandleDnsResult(std::string, struct addrinfo*, const void*);
     virtual void HandleRedirectResult(Resource*, HttpFetcherResponse*, RedirectInfo);
-    virtual void HandleHttpResponse3xx(Resource* res, HttpFetcherResponse *resp);
-    virtual void HandleDnsResult(std::string err_msg, struct addrinfo* ai, const void* contex);
-    virtual void HandleHttpResponse2xx(Resource* res, HttpFetcherResponse *resp);
+    virtual void HandleHttpResponse3xx(Resource*, HttpFetcherResponse *);
+    virtual void HandleHttpResponse2xx(Resource*, HttpFetcherResponse *);
 
 public:
-    HttpClient(size_t max_conn_size, size_t max_req_size, size_t max_result_size, const char* eth_name = NULL);
+    HttpClient(size_t max_conn_size, size_t max_req_size, 
+        size_t max_result_size, const char* eth_name = NULL);
+    void SetResultCallback(ResultCallback call_cb);
     virtual bool PutRequest(
-       const   std::string& url,
+       const std::string& url,
        void*  contex = NULL,
        MessageHeaders* user_headers = NULL,
        ResourcePriority prior = BatchConfig::DEFAULT_RES_PRIOR,
-       std::string batch_id = BatchConfig::DEFAULT_BATCH_ID
+       std::string batch_id   = BatchConfig::DEFAULT_BATCH_ID
     );
     virtual bool PutRequest(Resource* res);
     virtual void Close();
-    void SetProcCallback(SucCallback suc_cb, FailCallback fail_cb);
-    static  void* RunThread(void *context);
 
 private:
     boost::shared_ptr<ThreadingFetcher> fetcher_;
     boost::shared_ptr<Storage>          storage_; 
     boost::shared_ptr<DNSResolver>      dns_resolver_;
-    SucCallback                         suc_cb_;
-    FailCallback                        fail_cb_;
+    ResultCallback                      result_cb_;
 
     //抓取等待队列，精度为毫秒
     ServWaitMap  wait_lst_map_;
@@ -101,3 +103,5 @@ private:
     ChannelManager* channel_manager_;
     sockaddr * local_addr_;
 };
+
+#endif
