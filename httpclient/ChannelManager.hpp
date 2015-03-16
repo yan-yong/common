@@ -44,7 +44,7 @@ protected:
     //cache operation
     void check_add_cache(ServChannel* serv_channel)
     {
-        if(__empty(serv_channel) && serv_channel->cache_node_.empty())
+        if(__empty(serv_channel) && (serv_channel->cache_node_).empty())
         {
             SpinGuard guard(serv_cache_lock_);
             serv_cache_lst_.add_back(*serv_channel);
@@ -59,8 +59,6 @@ protected:
             host_cache_lst_.add_back(*host_channel);
             host_cache_cnt_++;
         }
-        if(host_channel->serv_)
-            check_add_cache(host_channel->serv_);
     }
     void check_remove_cache(ServChannel* serv_channel)
     {
@@ -68,7 +66,7 @@ protected:
         {
             SpinGuard guard(serv_cache_lock_);
             ServCacheList::del(*serv_channel);
-            ServChannel::cache_cnt_--;
+            serv_cache_cnt_--;
         }
     }
     void check_remove_cache(HostChannel* host_channel)
@@ -77,16 +75,14 @@ protected:
         {
             SpinGuard guard(host_cache_lock_);
             HostCacheList::del(*host_channel);
-            HostChannel::cache_cnt_--;
+            host_cache_cnt_--;
         }
-        if(host_channel->serv_)
-            check_remove_cache(host_channel->serv_);
     }
 
 public:
     unsigned WaitResCnt(ServChannel* serv_channel);
     unsigned WaitResCnt(HostChannel* host_channel);
-    ServChannel* SetServChannel(HostChannel*, ServChannel *);
+    void SetServChannel(HostChannel*, ServChannel *);
     void DestroyChannel(HostChannel* host_channel);
     void DestroyChannel(ServChannel* serv_channel);
     void AddResource(HostChannel* host_channel, Resource* res);
@@ -95,20 +91,22 @@ public:
     HostCacheList PopHostCache(unsigned cnt);
     ServCacheList PopServCache(unsigned cnt);
     void SetFetchIntervalMs(HostChannel*, unsigned);
-    void RemoveResource(HostChannel*, Resource*);
-    Resource* PopResource(HostChannel* host_channel);
-    Resource* PopResource(ServChannel* serv_channel);
+    void RemoveResource(Resource*);
+    //Resource* PopResource(HostChannel* host_channel);
+    //Resource* PopResource(ServChannel* serv_channel);
     Resource* PopAvailableResource(ServChannel* serv_channel);
-    std::string ToString(HostChannel* host_channel);
+    std::string ToString(HostChannel* host_channel) const;
     bool ConnectionAvailable(ServChannel* serv_channel);
     ServChannel* CreateServChannel(
         char scheme, struct addrinfo* ai, 
-        ServKey serv_key, unsigned max_err_rate, 
+        ServChannel::ServKey serv_key, unsigned max_err_rate, 
         ServChannel::ConcurencyMode concurency_mode, 
         struct sockaddr* local_addr);
     HostChannel* CreateHostChannel(
         char scheme, const std::string& host, unsigned port, 
-        HostKey host_key, unsigned fetch_interval_ms);
+        HostChannel::HostKey host_key, unsigned fetch_interval_ms);
+    ResourceList RemoveUnfinishRes(ServChannel* serv_channel);
+    void ReleaseConnection(Resource* res);
 };
 
 #endif 

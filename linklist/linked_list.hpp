@@ -36,7 +36,7 @@ public:
     //make sure: node.*list_node is not linked in another linklist, if so, you should del it first!!
     void add_front(T &node)
     {
-        assert(node.*list_node.empty());
+        assert((node.*list_node).empty());
         _head.next->prev = &(node.*list_node);
         (node.*list_node).next = _head.next;
         (node.*list_node).prev = &_head;
@@ -45,7 +45,7 @@ public:
     
     void add_back(T& node)
     {
-        assert(node.*list_node.empty());
+        assert((node.*list_node).empty());
         linked_list_node_t * p_back = _head.prev;
         linked_list_node_t * p_head = &_head;
         p_back->next = &(node.*list_node);

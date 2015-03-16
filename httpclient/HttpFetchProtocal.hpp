@@ -132,6 +132,6 @@ class HttpFetcherResponse : public FetcherResponse, public Response
 };
 
 bool IsHttpDefaultPort(int protocol, uint16_t port);
-uint16_t GetHttpDefaultPort(int protocol, uint16_t port);
+uint16_t GetHttpDefaultPort(int protocol);
 
 #endif   /* ----- #ifndef HTTPFETCHPROTOCAL_INC  ----- */

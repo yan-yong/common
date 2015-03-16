@@ -164,12 +164,12 @@ void Resource::Initialize(
 
 std::string Resource::GetHostWithPort() const
 {
-    return ChannelManager->Instance()->ToString(host_);
+    return (ChannelManager::Instance())->ToString(host_);
 }
 
 std::string Resource::GetUrl() const
 {
-    return ChannelManager->Instance()->ToString(host_) + suffix_;
+    return (ChannelManager::Instance())->ToString(host_) + suffix_;
 }
 
 URI Resource::GetURI() const
@@ -205,19 +205,19 @@ MessageHeaders* Resource::GetUserHeaders() const
     return ((ResExtend*)extend_)->user_headers_;
 }
 
-int Resource::GetProtocol() const 
+int Resource::GetScheme() const 
 {
-    return host_->protocal_;
+    return host_->scheme_;
 }
 
 uint16_t Resource::GetPort() const
 {
-    return host->port_;
+    return host_->port_;
 }
 
 bool Resource::ExceedMaxRetryNum() const
 {
-    return cur_retry_times_ > cfg_.max_retry_times_; 
+    return cur_retry_times_ > cfg_->max_retry_times_; 
 }
 
 time_t Resource::GetTimeoutStamp() const
@@ -229,17 +229,17 @@ time_t Resource::GetTimeoutStamp() const
 
 bool Resource::ReachMaxRedirectNum() const
 {
-    return RedirectCount() >= cfg_.max_redirect_times_;
+    return RedirectCount() >= cfg_->max_redirect_times_;
 }
 
-Resource* Resource::RootResource() const
+Resource* Resource::RootResource()
 {
     if(!is_redirect_)
         return this; 
     return ((ResExtend*)extend_)->root_res_;
 }
 
-std::string Resource::RootUrl() const
+std::string Resource::RootUrl()
 {
     return RootResource()->GetUrl();
 }

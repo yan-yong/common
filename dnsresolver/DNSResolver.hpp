@@ -12,10 +12,13 @@
 #include <boost/bind.hpp>
 #include <boost/function.hpp>
 
-typedef boost::function<void (std::string, struct addrinfo*, const void*)> ResolverCallback;
 
 class DNSResolver
 {
+public:
+    typedef boost::function<void (std::string, struct addrinfo*, const void*)> ResolverCallback;
+
+protected:
     struct RequestItem
     {
         ResolverCallback& callback_;
@@ -25,7 +28,6 @@ class DNSResolver
         {}
     };
 
-protected:
     struct event_base *base_;
     struct evdns_base *dnsbase_;
     struct evutil_addrinfo hints_;

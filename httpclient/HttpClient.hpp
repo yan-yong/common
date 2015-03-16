@@ -14,6 +14,7 @@
 #include "Channel.hpp"
 #include "Storage.hpp"
 #include "dnsresolver/DNSResolver.hpp"
+#include "TRedirectChecker.hpp"
 
 struct FetchResult 
 {
@@ -23,7 +24,7 @@ struct FetchResult
     
     FetchResult(FetchErrorType error, IFetchMessage *resp, 
         void* contex): 
-    error_(error), resp_(resp), _(res)
+    error_(error), resp_(resp)
     {}
 };
 
@@ -33,6 +34,7 @@ class HttpClient: protected IMessageEvents
     static const unsigned DEFAULT_RESULT_SIZE  = 1000000;
 
     typedef linked_list_map<time_t, ServChannel, &ServChannel::queue_node_> ServWaitMap;
+    typedef linked_list_map<time_t, Resource, &Resource::timed_lst_node_> ResTimedMap;
     typedef boost::shared_ptr<FetchResult> ResultPtr;
     typedef CQueue<ResultPtr > ResultQueue;
     typedef boost::function<void (Resource*, IFetchMessage*)> SucCallback;
@@ -41,7 +43,12 @@ class HttpClient: protected IMessageEvents
 private:
     void __pool();
     void __fetch_resource(Resource* p_res);
-    void __put_request();
+    void __fetch_serv(ServChannel* serv);
+    void __put_request(Resource*);
+    time_t __handle_timeout_list();
+    time_t __handle_wait_list();
+    void __update_curent_time();
+    REDIRECT_TYPE __get_redirect_type(int status_code);
 
 protected:
     virtual struct RequestData* CreateRequestData(void * request_context);
@@ -49,13 +56,17 @@ protected:
     virtual IFetchMessage* CreateFetchResponse(const FetchAddress& address, void * request_context);
     virtual void FreeFetchMessage(IFetchMessage *fetch_message);
 
+    void UpdateBatchConfig(std::string& batch_id, const BatchConfig&);
     virtual void ProcessResult(RawFetcherResult& result);
     virtual void ProcessSuccResult(Resource*, IFetchMessage*);
     virtual void ProcessFailResult(FetchErrorType, Resource*, IFetchMessage*);
     virtual void HandleRedirectResult(Resource*, HttpFetcherResponse*, RedirectInfo);
+    virtual void HandleHttpResponse3xx(Resource* res, HttpFetcherResponse *resp);
+    virtual void HandleDnsResult(std::string err_msg, struct addrinfo* ai, const void* contex);
+    virtual void HandleHttpResponse2xx(Resource* res, HttpFetcherResponse *resp);
 
 public:
-    HttpClient(size_t max_conn_size, size_t max_req_size, size_t max_result_size);
+    HttpClient(size_t max_conn_size, size_t max_req_size, size_t max_result_size, const char* eth_name = NULL);
     virtual bool PutRequest(
        const   std::string& url,
        void*  contex = NULL,
@@ -78,7 +89,7 @@ private:
     //抓取等待队列，精度为毫秒
     ServWaitMap  wait_lst_map_;
     //超时队列, 精度为秒
-    ResTimedMap  timed_lst_map_;
+    ResTimedMap timed_lst_map_;
     ResultQueue  result_queue_;
     size_t max_req_size_;
     size_t cur_req_size_;
@@ -88,4 +99,5 @@ private:
     bool stopped_;
     pthread_t tid_;
     ChannelManager* channel_manager_;
-}
+    sockaddr * local_addr_;
+};

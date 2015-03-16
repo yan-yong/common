@@ -61,7 +61,7 @@ int main()
         "www.china.com"
         */
     };
-    ResolverCallback callback = fun;
+    DNSResolver::ResolverCallback callback = fun;
     for(unsigned i = 0; i < sizeof(host)/sizeof(*host); i++)
     {
         resolver.Resolve(host[i], 80, callback, host[i].c_str());

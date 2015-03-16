@@ -159,6 +159,18 @@ public:
         if(it->second->empty())
             Base::erase(it);
     }
+    
+    List splice()
+    {
+        List splice_lst;
+        for(typename Base::iterator it = Base::begin(); it != Base::end(); )
+        {
+            splice_lst.splice_front(*it->second);
+            Base::erase(it++);
+        }
+        cur_cnt_ = 0;
+        return splice_lst;
+    } 
 };
 
 #endif

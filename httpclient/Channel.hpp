@@ -6,6 +6,7 @@
 #include "SchedulerTypes.hpp"
 #include "TUtility.hpp"
 #include "lock/lock.hpp"
+#include "HttpFetchProtocal.hpp"
 /**
     由于HostChannel与ServChannel相互引用，
     确保加锁顺序：先加ServChannel锁，再加HostChannel锁
@@ -45,10 +46,11 @@ struct HostChannel
 };
 
 typedef linked_list_t<HostChannel, &HostChannel::queue_node_> HostChannelList;
+typedef linked_list_t<Resource, &Resource::queue_node_> ResourceList; 
+
 struct ServChannel
 {
     //正在抓取的resource
-    typedef linked_list_t<Resource, &Resource::queue_node_> ResFetchingList; 
     typedef long long ServKey;
     enum ConcurencyMode
     {
@@ -94,7 +96,7 @@ struct ServChannel
     //该host允许的最大错误率 
     double max_err_rate_;
     //正在抓取的resource列表
-    ResFetchingList fetching_lst_;
+    ResourceList fetching_lst_;
     ServKey serv_key_;
     SpinLock    lock_;
     //待抓取的host列表
@@ -106,7 +108,7 @@ struct ServChannel
     ServChannel():
         fetch_time_ms_(0), is_foreign_(false), 
         concurency_mode_(DEFAULT_CONCURENCY_MODE), 
-        conn_using_cnt_(0), fetch_interval_ms_(0), 
+        fetch_interval_ms_(0), 
         max_err_rate_(DEFAULT_MAX_ERR_RATE), serv_key_(0)
     {}
 
@@ -163,5 +165,4 @@ struct ServChannel
 typedef linked_list_t<ServChannel, &ServChannel::cache_node_> ServCacheList;
 typedef linked_list_t<HostChannel, &HostChannel::cache_node_> HostCacheList;
 
-Connection* create_connection(struct sockaddr*);
 #endif

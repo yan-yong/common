@@ -1,14 +1,11 @@
-#ifndef FETCHKERNEL_SPIDERERRORCODE_HPP
-#define	FETCHKERNEL_SPIDERERRORCODE_HPP
+#ifndef __SCHEDULER_TYPES_HPP
+#define	__SCHEDULER_TYPES_HPP
 
 #include <time.h>
 #include <stddef.h>
 #include <sys/param.h>
-
 #include <string>
 #include <boost/function.hpp>
-
-// From spider_kernel
 #include "httpparser/URI.hpp"
 #include "httpparser/HttpMessage.hpp"
 #include "linklist/linked_list.hpp"
@@ -156,6 +153,10 @@ struct BatchConfig
     char accept_language_[512];
     char accept_[512];
 
+    BatchConfig()
+    {
+        memset(this, 0, sizeof(BatchConfig));
+    }
     BatchConfig(
         time_t timeout_sec,
         unsigned max_retry_times,
@@ -188,18 +189,18 @@ public:
         const std::string& suffix, ResourcePriority prior, 
         void* contex, MessageHeaders * user_headers, 
         Resource* parent_res, BatchConfig *cfg);
+    std::string GetHostWithPort() const;
     void Destroy();
     MessageHeaders* GetUserHeaders() const;
-    std::string GetHostWithPort() const;
     std::string GetUrl() const;
     URI GetURI() const;
-    int GetProtocol() const;
+    int GetScheme() const;
     uint16_t GetPort() const;
     bool ExceedMaxRetryNum() const;
     time_t GetTimeoutStamp() const;
     bool ReachMaxRedirectNum() const;
-    Resource* RootResource() const;
-    std::string RootUrl() const;
+    Resource* RootResource();
+    std::string RootUrl();
     unsigned RedirectCount() const;
 
 public:

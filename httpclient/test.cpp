@@ -1,14 +1,7 @@
 #include <stdio.h>
-
-template<class T , int n>
-class Test
-{
-public:
-    T t[n];
-};
+#include "SchedulerTypes.hpp"
 
 int main()
 {
-    Test<int, 5> test;
-    printf("%f %d\n", float(), test.t[2]);
+    FETCH_FAIL_GROUP error;
 }
