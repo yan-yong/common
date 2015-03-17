@@ -23,16 +23,27 @@ class HttpClient: protected IMessageEvents
 public:
     struct FetchResult 
     {
-        FetchErrorType error_;
+        FetchErrorType  error_;
         IFetchMessage * resp_;
-        void *        contex_;
+        Resource      * res_;
+        void          * contex_;
 
-        FetchResult(FetchErrorType error, IFetchMessage *resp, void* contex): 
-            error_(error), resp_(resp), context_(contex)
+        FetchResult(FetchErrorType error, IFetchMessage *resp,
+            Resource* res, void* contex): 
+            error_(error), resp_(resp), 
+            res_(res),  contex_(contex)
         {}
+        ~FetchResult()
+        {
+            if(resp_)
+                delete resp_;
+            if(res_)
+                Storage::Instance()->DestroyResource(res_); 
+        }
     };
-    typedef boost::function<void (FetchErrorType, IFetchMessage*, void*)> ResultCallback;
+
     typedef boost::shared_ptr<FetchResult> ResultPtr;
+    typedef boost::function<void (ResultPtr) > ResultCallback;
     typedef CQueue<ResultPtr > ResultQueue;
 
 private:
@@ -42,19 +53,20 @@ private:
     typedef linked_list_map<time_t, Resource, &Resource::timed_lst_node_> ResTimedMap;
 
 private:
-    void __pool();
     void __fetch_resource(Resource* p_res);
     void __fetch_serv(ServChannel* serv);
-    void __put_request(Resource*);
+    void __handle_request(Resource*);
     time_t __handle_timeout_list();
-    time_t __handle_wait_list();
     void __update_curent_time();
     REDIRECT_TYPE __get_redirect_type(int status_code);
 
 protected:
     static  void* RunThread(void *context);
     void UpdateBatchConfig(std::string&, const BatchConfig&);
-    void PutResult(FetchErrorType, IFetchMessage*, void*);
+    void PutResult(FetchErrorType, IFetchMessage*, Resource*, void*);
+    void FetchServ(ServChannel* serv_channel);
+    void Pool();
+    time_t CheckWaitList();
     virtual struct RequestData* CreateRequestData(void *);
     virtual void FreeRequestData(struct RequestData *);
     virtual IFetchMessage* CreateFetchResponse(const FetchAddress&, void *);
@@ -77,31 +89,30 @@ public:
        void*  contex = NULL,
        MessageHeaders* user_headers = NULL,
        ResourcePriority prior = BatchConfig::DEFAULT_RES_PRIOR,
-       std::string batch_id   = BatchConfig::DEFAULT_BATCH_ID
-    );
+       std::string batch_id   = BatchConfig::DEFAULT_BATCH_ID);
     virtual bool PutRequest(Resource* res);
     virtual void Close();
 
 private:
     boost::shared_ptr<ThreadingFetcher> fetcher_;
-    boost::shared_ptr<Storage>          storage_; 
     boost::shared_ptr<DNSResolver>      dns_resolver_;
     ResultCallback                      result_cb_;
 
     //抓取等待队列，精度为毫秒
     ServWaitMap  wait_lst_map_;
     //超时队列, 精度为秒
-    ResTimedMap timed_lst_map_;
+    ResTimedMap  timed_lst_map_;
     ResultQueue  result_queue_;
     size_t max_req_size_;
-    size_t cur_req_size_;
     size_t max_result_size_;
+    volatile size_t cur_req_size_;
     //当前时间，单位为毫秒
     time_t cur_time_;
     bool stopped_;
     pthread_t tid_;
     ChannelManager* channel_manager_;
     sockaddr * local_addr_;
+    SpinLock wait_lst_lock_;
 };
 
 #endif

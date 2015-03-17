@@ -16,50 +16,28 @@ void ChannelManager::__update_serv_host_state(HostChannel* host_channel)
     if(serv)
     {
         HostChannelList::del(*host_channel);
-        if(host_channel->res_lst_map_.size())
+        if(host_channel->res_wait_queue_.size())
             serv->wait_host_lst_.add_back(*host_channel);
         else 
             serv->idle_host_lst_.add_back(*host_channel);
     }
 }
 
-unsigned ChannelManager::__wait_res_cnt(ServChannel* serv_channel)
-{
-    if(!serv_channel || serv_channel->wait_host_lst_.empty())
-        return 0;
-    size_t cnt = 0;
-    HostChannel* host_channel = serv_channel->wait_host_lst_.get_front();
-    while(host_channel)
-    {
-        cnt += __wait_res_cnt(host_channel);
-        host_channel = serv_channel->wait_host_lst_.next(*host_channel); 
-    }
-    return cnt; 
-}
-
 Resource* ChannelManager::__pop_resource(HostChannel* host_channel)
 {
-    if(__wait_res_cnt(host_channel))
+    if(__wait_empty(host_channel))
         return NULL;
     Resource* p_res = NULL;
     ResourcePriority prior = RES_PRIORITY_LEVEL_5;
-    host_channel->res_lst_map_.get_front(prior, p_res);
-    host_channel->res_lst_map_.pop_front();
+    host_channel->res_wait_queue_.get_front(prior, p_res);
+    host_channel->res_wait_queue_.pop_front();
     // 检查host状态变迁 && host轮转
     __update_serv_host_state(host_channel);
     return p_res;
 }
 
-void ChannelManager::__release_connection(ServChannel* serv_channel, Connection* conn)
-{
-    if(serv_channel && conn)
-        serv_channel->conn_storage_.push_back(conn);
-}
-
 Connection* ChannelManager::__acquire_connection(ServChannel* serv_channel)
 {
-    if(serv_channel->conn_storage_.size() == 0)
-        return NULL;
     Connection* conn = serv_channel->conn_storage_.front();
     serv_channel->conn_storage_.pop_front();
     if(serv_channel->concurency_mode_ == ServChannel::CONCURENCY_NO_LIMIT)
@@ -67,16 +45,10 @@ Connection* ChannelManager::__acquire_connection(ServChannel* serv_channel)
     return conn;
 }
 
-unsigned ChannelManager::WaitResCnt(ServChannel* serv_channel)
+bool ChannelManager::WaitEmpty(ServChannel* serv_channel)
 {
     SpinGuard guard(serv_channel->lock_);
-    return __wait_res_cnt(serv_channel);
-}
-
-unsigned ChannelManager::WaitResCnt(HostChannel* host_channel)
-{
-    SpinGuard guard(host_channel->lock_);
-    return __wait_res_cnt(host_channel);
+    return __wait_empty(serv_channel);
 }
 
 void ChannelManager::SetServChannel(HostChannel* host_channel, ServChannel * serv_channel)
@@ -151,31 +123,64 @@ void ChannelManager::DestroyChannel(ServChannel* serv_channel)
 
 ResourceList ChannelManager::RemoveUnfinishRes(ServChannel* serv_channel)
 {
+    SpinGuard guard(serv_channel->lock_);
     ResourceList unfinish_lst;
     HostChannel * host_channel = NULL;
     while(!serv_channel->wait_host_lst_.empty())
     {
         host_channel = serv_channel->wait_host_lst_.get_front();
-        ResourceList wait_lst = (host_channel->res_lst_map_).splice();
+        SpinGuard guard(host_channel->lock_);
+        ResourceList wait_lst = (host_channel->res_wait_queue_).splice();
         unfinish_lst.splice_front(wait_lst);
     }
     unfinish_lst.splice_front(serv_channel->fetching_lst_);
+    if(serv_channel->pres_wait_queue_)
+    {
+        ResourceList wait_lst = serv_channel->pres_wait_queue_->splice();
+        unfinish_lst.splice_front(wait_lst);
+    }
     return unfinish_lst;
 }
 
-void ChannelManager::AddResource(HostChannel* host_channel, Resource* res)
+ResourceList ChannelManager::RemoveUnfinishRes(HostChannel* host_channel)
 {
-    SpinGuard serv_guard(__serv_lock(host_channel->serv_));
-    SpinGuard host_guard(host_channel->lock_);
+    SpinGuard guard(host_channel->lock_);
+    ResourceList unfinish_lst = host_channel->res_wait_queue_.splice();
+    __update_serv_host_state(host_channel);
+    return unfinish_lst;
+}
+
+//resource挂到HostChannel下
+void ChannelManager::AddResource(Resource* res)
+{
     assert(res->queue_node_.empty());
-    res->host_ = host_channel;
-    host_channel->res_lst_map_.add_back(res->prior_, *res);
+    HostChannel* host_channel = res->host_;
+    ServChannel* serv_channel = host_channel->serv_;
+    if(res->serv_)
+        serv_channel = res->serv_;
+
+    SpinGuard serv_guard(__serv_lock(serv_channel));
+    SpinGuard host_guard(host_channel->lock_);
     ++host_channel->ref_cnt_;
-    res->serv_ = host_channel->serv_;
     check_remove_cache(host_channel);
-    check_remove_cache(res->serv_);
-    if(__wait_res_cnt(host_channel) == 1) 
-        __update_serv_host_state(host_channel);
+    //如果Resource指定了ServChannel，则res直接挂到ServChannel下
+    if(res->serv_)
+    {
+        if(!serv_channel->pres_wait_queue_)
+            serv_channel->pres_wait_queue_ = new ResPriorQueue;
+        serv_channel->pres_wait_queue_->add_back(res->prior_, *res);
+    }
+    //否则，res挂到HostChannel下
+    else
+    {
+        bool host_wait_empty = __wait_empty(host_channel);
+        res->serv_ = host_channel->serv_;
+        host_channel->res_wait_queue_.add_back(res->prior_, *res);
+        if(host_wait_empty) 
+            __update_serv_host_state(host_channel);
+    }
+    if(serv_channel)
+        check_remove_cache(serv_channel);
 }
 
 HostCacheList ChannelManager::PopHostCache(unsigned cnt)
@@ -227,11 +232,9 @@ void ChannelManager::ReleaseConnection(Resource* res)
 void ChannelManager::RemoveResource(Resource* res)
 {
     SpinGuard serv_guard(__serv_lock(res->serv_));
-    SpinGuard host_guard(res->host_->lock_);
-    res->host_->ref_cnt_--;
     if(res->serv_)
     {
-        res->serv_->fetching_lst_.del(*res);
+        ResourceList::del(*res);
         if(res->conn_)
         {
             (res->serv_->conn_storage_).push_back(res->conn_);
@@ -239,6 +242,8 @@ void ChannelManager::RemoveResource(Resource* res)
         }
         check_add_cache(res->serv_);
     }
+    SpinGuard host_guard(res->host_->lock_);
+    --res->host_->ref_cnt_;
     check_add_cache(res->host_); 
     res->host_ = NULL;
     res->serv_ = NULL;
@@ -247,20 +252,35 @@ void ChannelManager::RemoveResource(Resource* res)
 Resource* ChannelManager::PopAvailableResource(ServChannel* serv_channel)
 {
     SpinGuard serv_guard(serv_channel->lock_);
-    if(serv_channel->wait_host_lst_.empty())
-        return NULL;
-    Connection* conn = __acquire_connection(serv_channel);
-    assert(conn);
-    HostChannel* host_channel = serv_channel->wait_host_lst_.get_front();
-    SpinGuard host_guard(host_channel->lock_);
-    //conn->scheme = host_channel->GetScheme();
-    Resource* res = __pop_resource(host_channel);
-    if(res)
+    if(__wait_empty(serv_channel) || serv_channel->conn_storage_.size() == 0)
     {
-        res->conn_ = conn;
-        res->serv_ = serv_channel;
-        (serv_channel->fetching_lst_).add_back(*res);
+        return NULL;
     }
+    Connection* conn = __acquire_connection(serv_channel);
+    Resource* res = NULL;
+    //如果pres_wait_queue_和HostChannel里都有Resource排队，
+    //各按50%的比例
+    if(serv_channel->pres_wait_queue_ &&
+       !serv_channel->pres_wait_queue_->empty() && 
+       (serv_channel->wait_host_lst_.empty() || rand() % 2))
+    {
+        ResourcePriority prior = RES_PRIORITY_NOUSE;
+        serv_channel->pres_wait_queue_->get_front(prior, res);
+        serv_channel->pres_wait_queue_->pop_front();
+    }
+    else
+    {
+        HostChannel* host_channel = serv_channel->wait_host_lst_.get_front();
+        SpinGuard host_guard(host_channel->lock_);
+        res = __pop_resource(host_channel);
+        //conn->scheme = host_channel->GetScheme();
+        if(res)
+        {
+            res->conn_ = conn;
+            res->serv_ = serv_channel;
+        }
+    }
+    (serv_channel->fetching_lst_).add_back(*res);
     return res;
 }
 

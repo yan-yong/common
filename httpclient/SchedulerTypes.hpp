@@ -231,21 +231,31 @@ struct ResExtend
     unsigned        cur_redirect_times_;
 };
 
-struct FetchErrorType
+class FetchErrorType
 {
-    public:
-	FetchErrorType(FETCH_FAIL_GROUP group, int error):
-	    error_group_(group), error_num_(error){}
+public:
+	FetchErrorType(FETCH_FAIL_GROUP group, int error): error_group_(group), error_num_(error)
+    {
+    }
+    FETCH_FAIL_GROUP group() const 
+    {
+        return error_group_;
+    }
+    int error_num() const 
+    {
+        return error_num_;
+    }
+    void set(FETCH_FAIL_GROUP group, int error_num)
+    {
+        error_group_=group; 
+        error_num_ = error_num;
+    }
 
-        FETCH_FAIL_GROUP group() const {return error_group_;}
-        int error_num() const {return error_num_;}
-
-        void set(FETCH_FAIL_GROUP group, int error_num){error_group_=group; error_num_ = error_num;}
-
-    private:
-        FETCH_FAIL_GROUP error_group_;
-        int error_num_;
+private:
+    FETCH_FAIL_GROUP error_group_;
+    int error_num_;
 };
+
 const char* GetFetchErrorGroupName(int gid);
 const char* GetSpiderError(int code);
 const char* GetSpiderError(FETCH_ERROR code);

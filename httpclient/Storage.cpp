@@ -80,8 +80,9 @@ void Storage::__save_unfinish_resource(ResourceList res_lst)
     }
 }
 
-Storage::Storage(size_t host_cache_max, size_t serv_cache_max):
-    host_cache_max_(host_cache_max), serv_cache_max_(serv_cache_max), close_(false)
+Storage::Storage():
+    host_cache_max_(MAX_CACHE_HOST), 
+    serv_cache_max_(MAX_CACHE_SERV), close_(false)
 {
     channel_manager_ = ChannelManager::Instance();
 }
@@ -256,7 +257,6 @@ Resource* Storage::CreateResource(
             suffix += "?" + uri.Query();
         res->Initialize(host_channel, suffix, prior, contex, 
                 user_headers, root_res, batch_cfg);
-        channel_manager_->AddResource(host_channel, res);
         return res;
     }
     return NULL; 

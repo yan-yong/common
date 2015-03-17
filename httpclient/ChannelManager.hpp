@@ -19,8 +19,6 @@ private:
 protected:
     void __update_serv_host_state(HostChannel* host_channel);
     Resource* __pop_resource(HostChannel* host_channel);
-    unsigned __wait_res_cnt(ServChannel* serv_channel);
-    void __release_connection(ServChannel* , Connection* );
     Connection* __acquire_connection(ServChannel* serv_channel);
 
     /**** inline operation ****/
@@ -35,11 +33,19 @@ protected:
     bool __empty(ServChannel* serv_channel)
     {
         return serv_channel->fetching_lst_.empty() && 
-            serv_channel->wait_host_lst_.empty();
+               serv_channel->wait_host_lst_.empty() && 
+               (!serv_channel->pres_wait_queue_ || 
+               serv_channel->pres_wait_queue_->empty());
     }
-    unsigned __wait_res_cnt(HostChannel* host_channel)
+    bool __wait_empty(ServChannel* serv_channel)
     {
-        return host_channel->res_lst_map_.size();
+        return serv_channel->wait_host_lst_.empty() &&
+               (!serv_channel->pres_wait_queue_ || 
+               serv_channel->pres_wait_queue_->empty());
+    }
+    bool __wait_empty(HostChannel* host_channel)
+    {
+        return host_channel->res_wait_queue_.empty();
     }
     //cache operation
     void check_add_cache(ServChannel* serv_channel)
@@ -80,12 +86,11 @@ protected:
     }
 
 public:
-    unsigned WaitResCnt(ServChannel* serv_channel);
-    unsigned WaitResCnt(HostChannel* host_channel);
+    bool WaitEmpty(ServChannel* serv_channel);
     void SetServChannel(HostChannel*, ServChannel *);
     void DestroyChannel(HostChannel* host_channel);
     void DestroyChannel(ServChannel* serv_channel);
-    void AddResource(HostChannel* host_channel, Resource* res);
+    void AddResource(Resource* res);
     unsigned GetHostCacheSize() { return host_cache_cnt_;}
     unsigned GetServCacheSize() { return serv_cache_cnt_;}
     HostCacheList PopHostCache(unsigned cnt);
@@ -106,6 +111,7 @@ public:
         char scheme, const std::string& host, unsigned port, 
         HostChannel::HostKey host_key, unsigned fetch_interval_ms);
     ResourceList RemoveUnfinishRes(ServChannel* serv_channel);
+    ResourceList RemoveUnfinishRes(HostChannel* host_channel);
     void ReleaseConnection(Resource* res);
 };
 

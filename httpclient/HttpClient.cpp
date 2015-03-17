@@ -12,16 +12,12 @@ static FETCH_FAIL_GROUP __srv_error_group(int error)
     return error >= 192 ? FETCH_FAIL_GROUP_SSL:FETCH_FAIL_GROUP_SERVER;
 }
 
-HttpClient::HttpClient(size_t max_conn_size, size_t max_req_size, 
-    size_t max_result_size, const char* eth_name):
+HttpClient::HttpClient(size_t max_conn_size, size_t max_req_size, size_t max_result_size, const char* eth_name):
     max_req_size_(DEFAULT_REQUEST_SIZE),
-    cur_req_size_(0),
-    max_result_size_(DEFAULT_RESULT_SIZE), 
-    cur_time_(0), stopped_(false),
-    local_addr_(NULL)
+    max_result_size_(DEFAULT_RESULT_SIZE), cur_req_size_(0),
+    cur_time_(0), stopped_(false), local_addr_(NULL)
 {
     fetcher_.reset(new ThreadingFetcher(this));
-    storage_.reset(new Storage());
     dns_resolver_.reset(new DNSResolver());
     pthread_create(&tid_, NULL, RunThread, this);
     channel_manager_ = ChannelManager::Instance();
@@ -38,7 +34,7 @@ void* HttpClient::RunThread(void *contex)
 {
     HttpClient* http_client = (HttpClient*)contex;
     while(!http_client->stopped_)
-        http_client->__pool();
+        http_client->Pool();
     return NULL;
 }
 
@@ -51,46 +47,77 @@ void HttpClient::Close()
 void HttpClient::UpdateBatchConfig(std::string& batch_id, 
     const BatchConfig& cfg)
 {
-    storage_->UpdateBatchConfig(batch_id, cfg);
+    Storage::Instance()->UpdateBatchConfig(batch_id, cfg);
 }
 
-void HttpClient::PutResult(FetchErrorType error, IFetchMessage *message, void* contex)
+void HttpClient::PutResult(FetchErrorType error, IFetchMessage *message, 
+    Resource* res, void* contex)
 {
+    boost::shared_ptr<FetchResult> result(
+        new FetchResult(error, message, res, contex));
     if(result_cb_)
-        result_cb_(error, message, contex);
+        result_cb_(result);
     else
-    {
-        boost::shared_ptr<FetchResult> result(new FetchResult(error, message, contex));
         result_queue_.enqueue(result); 
-    }
+}
+
+void HttpClient::FetchServ(ServChannel* serv_channel)
+{
+    SpinGuard guard(wait_lst_lock_);
+    if(serv_channel->queue_node_.empty())
+        __fetch_serv(serv_channel);
 }
 
 void HttpClient::ProcessSuccResult(Resource* res, IFetchMessage *message)
 {
+    __sync_fetch_and_sub(&cur_req_size_, 1);
     FetchErrorType fetch_ok(FETCH_FAIL_GROUP_OK, RS_OK);
     if(res->serv_)
         res->serv_->AddSucc();
-    PutResult(fetch_ok, message, res->contex_);
+    PutResult(fetch_ok, message, res, res->contex_);
+    if(res->serv_ && res->serv_->queue_node_.empty())
+        FetchServ(res->serv_);
 }
 
 void HttpClient::ProcessFailResult(FetchErrorType fetch_error, 
     Resource* res, IFetchMessage *message)
 {
-    if(res->serv_)
+    __sync_fetch_and_sub(&cur_req_size_, 1);
+    if(res->serv_ && fetch_error.group() == FETCH_FAIL_GROUP_SERVER)
+    {
         res->serv_->AddFail();
-    //TODO: add serv error operation
-    PutResult(fetch_error, message, res->contex_);
+        if(res->serv_->IsServErr())
+        {
+            //TODO: add serv error operation
+        }
+        if(!res->ExceedMaxRetryNum())
+        {
+            //TODO: try another server or delay try 
+        }
+    }
+    PutResult(fetch_error, message, res, res->contex_);
+    if(res->serv_ && res->serv_->queue_node_.empty())
+        FetchServ(res->serv_);
 }
 
 void HttpClient::HandleDnsResult(std::string err_msg, 
     struct addrinfo* ai, const void* contex)
 {
     HostChannel *host_channel = (HostChannel*)contex;
-    ServChannel* serv_channel = 
-        storage_->AcquireServChannel(ai, host_channel->scheme_, local_addr_);
-    channel_manager_->SetServChannel(host_channel, serv_channel);
-    if(!serv_channel->queue_node_.empty())
-        __fetch_serv(serv_channel); 
+    if(err_msg.empty())
+    {
+        host_channel->dns_err_cnt_ = 0;
+        ServChannel* serv_channel  = 
+            Storage::Instance()->AcquireServChannel(ai, host_channel->scheme_, local_addr_);
+        channel_manager_->SetServChannel(host_channel, serv_channel);
+        if(!serv_channel->queue_node_.empty())
+            __fetch_serv(serv_channel); 
+        return;
+    }
+    if(++host_channel->dns_err_cnt_ >=  HostChannel::DEFAULT_MAX_DNS_ERR_COUNT)
+    {
+        FetchErrorType fetch_err(FETCH_FAIL_GROUP_DNS, RS_DNS_SUBMIT_FAIL);
+    }
 }
 
 void HttpClient::HandleHttpResponse3xx(Resource* res, HttpFetcherResponse *resp)
@@ -172,11 +199,11 @@ void HttpClient::HandleRedirectResult( Resource* res, HttpFetcherResponse *resp,
         return; 
     }
     Resource* root_res = res->RootResource(); 
-    Resource* sub_res  = storage_->CreateResource(
+    Resource* sub_res  = Storage::Instance()->CreateResource(
         ri.to_url, root_res->contex_, root_res->cfg_, 
         root_res->prior_, root_res->GetUserHeaders(), 
         root_res->RootResource());
-    __put_request(sub_res);
+    __handle_request(sub_res);
 }
 
 REDIRECT_TYPE HttpClient::__get_redirect_type(int status_code)
@@ -192,8 +219,10 @@ REDIRECT_TYPE HttpClient::__get_redirect_type(int status_code)
     return type;
 }
 
-void HttpClient::__put_request(Resource* res)
+void HttpClient::__handle_request(Resource* res)
 {
+    __sync_fetch_and_add(&cur_req_size_, 1);
+    channel_manager_->AddResource(res);
     //dns不知, 则先取解dns
     if(!res->serv_)
     {
@@ -209,15 +238,15 @@ void HttpClient::__put_request(Resource* res)
     if(timeout_stamp > 0)
         timed_lst_map_.add_back(timeout_stamp, *res);
     if(res->serv_->queue_node_.empty())
-        __fetch_serv(res->serv_);
+        FetchServ(res->serv_);
 }
 
 bool HttpClient::PutRequest(
-    const   std::string& url,
+    const  std::string& url,
     void*  contex,
     MessageHeaders* user_headers,
     ResourcePriority prior,
-    std::string batch_id)
+    std::string batch_id )
 {
     if(cur_req_size_ > max_req_size_)
     {
@@ -225,15 +254,15 @@ bool HttpClient::PutRequest(
             max_req_size_, url.c_str());
         return false;
     }
-    BatchConfig * batch_cfg = storage_->AcquireBatchCfg(batch_id);
-    Resource* res = storage_->CreateResource(url, contex, 
+    BatchConfig * batch_cfg = Storage::Instance()->AcquireBatchCfg(batch_id);
+    Resource* res = Storage::Instance()->CreateResource(url, contex, 
         batch_cfg, prior, user_headers, NULL);
     if(!res)
     {
         LOG_ERROR("[HttpClient] invalid uri: %s\n", url.c_str());
         return false; 
     }
-    __put_request(res);
+    __handle_request(res);
     return true;
 }
 
@@ -242,10 +271,10 @@ bool HttpClient::PutRequest(Resource* res)
     if(cur_req_size_ > max_req_size_)
     {
         LOG_ERROR("[HttpClient] exceed max request size: %zd, %s\n", 
-            max_req_size_, res->GetUrl().c_str());
+        max_req_size_, res->GetUrl().c_str());
         return false;
     }
-    __put_request(res);
+    __handle_request(res);
     return true;
 }
 
@@ -265,7 +294,7 @@ void HttpClient::__update_curent_time()
  **/
 void HttpClient::__fetch_serv(ServChannel* serv)
 {
-    while(channel_manager_->WaitResCnt(serv) && 
+    while(!channel_manager_->WaitEmpty(serv) && 
         channel_manager_->ConnectionAvailable(serv))
     {
         time_t ready_time = serv->GetReadyTime();
@@ -294,24 +323,26 @@ void HttpClient::__fetch_resource(Resource* p_res)
     request.conn = p_res->conn_;
     request.context = p_res;
     fetcher_->PutRequest(request);
-    cur_req_size_ += 1;
     //进入内核后不再控制超时，从超时队列中删除
     timed_lst_map_.del(*p_res);
 }
 
 //handle wait list
-time_t HttpClient::__handle_wait_list()
+time_t HttpClient::CheckWaitList()
 {
     __update_curent_time();
-    while(!wait_lst_map_.empty() && !fetcher_->IsOverload())
+    while(!fetcher_->IsOverload())
     {
+        SpinGuard lock(wait_lst_lock_);
+        if(wait_lst_map_.empty())
+            break;
         time_t timeout = 0;
         ServChannel * serv_channel = NULL;
         wait_lst_map_.get_front(timeout, serv_channel);
         if(timeout > cur_time_)
             return timeout - cur_time_;
         wait_lst_map_.pop_front();
-        if(!channel_manager_->WaitResCnt(serv_channel))
+        if(channel_manager_->WaitEmpty(serv_channel))
             continue;
         __fetch_serv(serv_channel);
     }
@@ -331,7 +362,6 @@ time_t HttpClient::__handle_timeout_list()
         timed_lst_map_.pop_front();
         FetchErrorType fetch_error(FETCH_FAIL_GROUP_CANCELED, RS_PADDING_TIMEOUT); 
         ProcessFailResult(fetch_error, p_res, NULL);
-        storage_->DestroyResource(p_res);
     }
     return 0;
 }
@@ -389,43 +419,31 @@ void HttpClient::ProcessResult(RawFetcherResult& fetch_result)
         resp_time = cur_time_ - res->arrive_time_;
     serv->AddRespTime(resp_time);
 
-    do
+    if(err_num)
     {
-        if(err_num)
-        {
-            FetchErrorType fetch_error(__srv_error_group(err_num), err_num);
-            ProcessFailResult(fetch_error, res, resp);
-            break;
-        }
-        assert(resp);
-        if (resp->SizeExceeded())
-        {
-            FetchErrorType fetch_error(FETCH_FAIL_GROUP_RULE, RS_INVALID_PAGESIZE);
-            ProcessFailResult(fetch_error, res, resp);
-            break;
-        }
-        if(2 == resp->StatusCode / 100)
-        {
-            HandleHttpResponse2xx(res, resp);
-            break;
-        }
-        if(3 == resp->StatusCode / 100) 
-        {
-            HandleHttpResponse3xx(res, resp);
-            break;
-        }
+        FetchErrorType fetch_error(__srv_error_group(err_num), err_num);
+        ProcessFailResult(fetch_error, res, resp);
+        return;
+    }
+    assert(resp);
+    if (resp->SizeExceeded())
+    {
+        FetchErrorType fetch_error(FETCH_FAIL_GROUP_RULE, RS_INVALID_PAGESIZE);
+        ProcessFailResult(fetch_error, res, resp);
+        return;
+    }
+    if(2 == resp->StatusCode / 100)
+        HandleHttpResponse2xx(res, resp);
+    else if(3 == resp->StatusCode / 100) 
+        HandleHttpResponse3xx(res, resp);
+    else
+    {
         FetchErrorType fetch_error(FETCH_FAIL_GROUP_HTTP, resp->StatusCode);
         ProcessFailResult(fetch_error, res, resp);
-    }while(false);
-
-    //后续处理
-    storage_->DestroyResource(res);
-    delete resp;
-    if(serv->queue_node_.empty())
-        __fetch_serv(serv);
+    }
 }
 
-void HttpClient::__pool()
+void HttpClient::Pool()
 {
     struct timeval timeout; 
     timeout.tv_sec = 0;
@@ -435,7 +453,7 @@ void HttpClient::__pool()
     RawFetcherResult fetch_result;
     while (fetcher_->GetResult(&fetch_result, &timeout) == 0) 
         ProcessResult(fetch_result);
-    __handle_wait_list();
+    CheckWaitList();
     __handle_timeout_list();
 }
 
