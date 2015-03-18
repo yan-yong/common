@@ -74,8 +74,9 @@ public:
     void DestroyChannel(ServChannel* serv_channel);
     ServChannel* CreateServChannel(
         char scheme, struct addrinfo* ai, 
-        ServChannel::ServKey serv_key, unsigned max_err_rate, 
+        ServChannel::ServKey serv_key, 
         ServChannel::ConcurencyMode concurency_mode, 
+        unsigned max_err_rate, unsigned max_err_count,
         struct sockaddr* local_addr);
     HostChannel* CreateHostChannel(
         char scheme, const std::string& host, unsigned port, 

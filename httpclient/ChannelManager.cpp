@@ -197,7 +197,7 @@ ResourceList ChannelManager::RemoveUnfinishRes(HostChannel* host_channel)
     return unfinish_lst;
 }
 
-//resource挂到HostChannel下
+//放入resource
 void ChannelManager::AddResource(Resource* res)
 {
     assert(res->queue_node_.empty());
@@ -240,6 +240,7 @@ void ChannelManager::AddResource(Resource* res)
     }
 }
 
+//删除resource
 void ChannelManager::RemoveResource(Resource* res)
 {
     SpinGuard serv_guard(__serv_lock(res->serv_));
@@ -369,7 +370,10 @@ std::vector<Resource*> ChannelManager::PopAvailableResources(unsigned max_count)
         ServChannel* serv_channel = NULL; 
         serv_wait_lst_map_.get_front(ready_time, serv_channel);
         if(ready_time > cur_time)
+        {
+            min_ready_time_ = ready_time;
             break;
+        }
         SpinGuard serv_guard(serv_channel->lock_);
         serv_wait_lst_map_.pop_front();
         PopAvailableResources(serv_channel, res_vec, max_count);
@@ -410,14 +414,16 @@ std::string ChannelManager::ToString(HostChannel* host_channel) const
 
 ServChannel* ChannelManager::CreateServChannel(
     char scheme, struct addrinfo* ai, 
-    ServChannel::ServKey serv_key, unsigned max_err_rate, 
-    ServChannel::ConcurencyMode concurency_mode, 
+    ServChannel::ServKey serv_key, 
+    ServChannel::ConcurencyMode concurency_mode,
+    unsigned max_err_rate, unsigned max_err_count,
     struct sockaddr* local_addr)
 {
     ServChannel * serv = new ServChannel();
     serv->concurency_mode_ = concurency_mode;
     serv->serv_key_ = serv_key;
     serv->max_err_rate_ = max_err_rate;
+    serv->max_err_count_ = max_err_count;
     struct addrinfo * cur_ai = ai;
     while(!cur_ai)
     {

@@ -66,15 +66,17 @@ struct ServChannel
         CONCURENCY_NO_LIMIT
     };
 
-    static const double DEFAULT_MAX_ERR_RATE = 0.8;
+    static const double DEFAULT_MAX_ERR_RATE  = 0.8;
     static const ConcurencyMode DEFAULT_CONCURENCY_MODE = CONCURENCY_PER_SERV;
+    static const double DEFAULT_ERR_DELAY_SEC = 0;
+    static const unsigned DEFAULT_MAX_ERR_NUM = 20;
 
     //统计错误率
-    StasticCount<double, 10> err_rate_;
+    StasticCount<double, 100> err_rate_;
     //记录最近的抓取时间
     time_t   fetch_time_ms_;
     //统计对端服务器答复的快慢
-    StasticCount<double, 10> resp_time_;
+    StasticCount<double, 100> resp_time_;
     //该serv的国内外属性
     unsigned char is_foreign_: 1;
     //该serv连续失败的次数
@@ -90,6 +92,8 @@ struct ServChannel
     linked_list_node_t cache_node_;
     //抓取间隔时间 
     unsigned fetch_interval_ms_;
+    //连续失败的最大次数
+    unsigned max_err_count_;
     //该host允许的最大错误率 
     double max_err_rate_;
     //正在抓取的resource列表
@@ -105,10 +109,13 @@ struct ServChannel
 
     //fetch_interval_ms为抓取的间隔时间, 单位为毫秒
     ServChannel():
-        fetch_time_ms_(0), is_foreign_(0), err_count_(0), err_delay_sec_(0), 
-        concurency_mode_(DEFAULT_CONCURENCY_MODE), fetch_interval_ms_(0), 
-        max_err_rate_(DEFAULT_MAX_ERR_RATE), serv_key_(0),
-        pres_wait_queue_(NULL)
+        fetch_time_ms_(0), is_foreign_(0), err_count_(0), 
+        err_delay_sec_(DEFAULT_ERR_DELAY_SEC), 
+        concurency_mode_(DEFAULT_CONCURENCY_MODE), 
+        fetch_interval_ms_(0), 
+        max_err_count_(DEFAULT_MAX_ERR_NUM),
+        max_err_rate_(DEFAULT_MAX_ERR_RATE), 
+        serv_key_(0), pres_wait_queue_(NULL)
     {}
 
     time_t GetReadyTime() const
@@ -158,7 +165,8 @@ struct ServChannel
     }
     bool IsServErr() const
     {
-        return err_rate_.Average() > max_err_rate_;
+        return err_rate_.Average() > max_err_rate_ || 
+            err_count_ > max_err_count_;
     } 
     ServKey GetServKey() const
     {

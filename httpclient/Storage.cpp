@@ -156,11 +156,12 @@ void Storage::UpdateBatchConfig(std::string& batch_id, const BatchConfig& cfg)
 }
 
 ServChannel* Storage::AcquireServChannel(
-        struct addrinfo* ai,
+        struct addrinfo* ai, 
         char   scheme,
-        struct sockaddr* local_addr,
         ServChannel::ConcurencyMode concurency_mode, 
-        double max_err_rate)
+        double max_err_rate, unsigned max_err_count,
+        unsigned err_delay_sec,
+        struct sockaddr* local_addr )
 {
     ServKey serv_key = __aigetkey(ai, scheme, local_addr); 
     {

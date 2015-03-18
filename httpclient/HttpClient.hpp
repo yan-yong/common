@@ -25,20 +25,16 @@ public:
     {
         FetchErrorType  error_;
         IFetchMessage * resp_;
-        Resource      * res_;
         void          * contex_;
 
-        FetchResult(FetchErrorType error, IFetchMessage *resp,
-            Resource* res, void* contex): 
-            error_(error), resp_(resp), 
-            res_(res),  contex_(contex)
+        FetchResult(FetchErrorType error, 
+            IFetchMessage *resp, void* contex): 
+            error_(error), res_(res),  contex_(contex)
         {}
         ~FetchResult()
         {
             if(resp_)
                 delete resp_;
-            if(res_)
-                Storage::Instance()->DestroyResource(res_); 
         }
     };
 
@@ -63,10 +59,8 @@ private:
 protected:
     static  void* RunThread(void *context);
     void UpdateBatchConfig(std::string&, const BatchConfig&);
-    void FetchServ(ServChannel* serv_channel);
     void Pool();
-    void PutResult(FetchErrorType, IFetchMessage*, Resource*, void*);
-    time_t CheckWaitList();
+    void PutResult(FetchErrorType, IFetchMessage*, void*);
 
     virtual struct RequestData* CreateRequestData(void *);
     virtual void FreeRequestData(struct RequestData *);
@@ -91,8 +85,10 @@ public:
        MessageHeaders* user_headers = NULL,
        ResourcePriority prior = BatchConfig::DEFAULT_RES_PRIOR,
        std::string batch_id   = BatchConfig::DEFAULT_BATCH_ID);
-    virtual bool PutRequest(Resource* res);
+    //virtual bool PutRequest(Resource* res);
     virtual void Close();
+    void SetServConfig(ServChannel::ConcurencyMode, double, 
+        unsigned, unsigned);
 
 private:
     boost::shared_ptr<ThreadingFetcher> fetcher_;
@@ -114,6 +110,12 @@ private:
     ChannelManager* channel_manager_;
     sockaddr * local_addr_;
     SpinLock wait_lst_lock_;
+
+    //serv配置
+    ServChannel::ConcurencyMode serv_concurency_mode_;
+    double   serv_max_err_rate_;
+    unsigned serv_err_delay_sec_;
+    unsigned serv_max_err_count_;
 };
 
 #endif

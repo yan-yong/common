@@ -184,6 +184,9 @@ struct BatchConfig
 
 struct Resource 
 {
+private:
+    ~Resource();
+
 public:
     void Initialize(HostChannel* host_channel,
         const std::string& suffix, ResourcePriority prior, 

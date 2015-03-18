@@ -95,9 +95,11 @@ public:
     ServChannel* AcquireServChannel(
         struct addrinfo* ai,
         char   scheme,
-        struct sockaddr* local_addr = NULL,
-        ServChannel::ConcurencyMode concurency_mode = ServChannel::DEFAULT_CONCURENCY_MODE, 
-        double max_err_rate = ServChannel::DEFAULT_MAX_ERR_RATE );
+        ServChannel::ConcurencyMode concurency_mode, 
+        double max_err_rate, unsigned max_err_count,
+        struct sockaddr* local_addr,
+        unsigned err_delay_sec,
+        struct sockaddr* local_addr);
 
     Resource* CreateResource(
             const   std::string& url,

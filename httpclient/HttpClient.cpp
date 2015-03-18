@@ -15,7 +15,11 @@ static FETCH_FAIL_GROUP __srv_error_group(int error)
 HttpClient::HttpClient(size_t max_conn_size, size_t max_req_size, size_t max_result_size, const char* eth_name):
     max_req_size_(DEFAULT_REQUEST_SIZE),
     max_result_size_(DEFAULT_RESULT_SIZE), cur_req_size_(0),
-    cur_time_(0), stopped_(false), local_addr_(NULL)
+    cur_time_(0), stopped_(false), local_addr_(NULL),
+    serv_concurency_mode_(ServChannel::DEFAULT_CONCURENCY_MODE),
+    serv_max_err_rate_(ServChannel::DEFAULT_MAX_ERR_RATE),
+    serv_err_delay_sec_(ServChannel::DEFAULT_ERR_DELAY_SEC),
+    serv_max_err_count_(ServChannel::DEFAULT_MAX_ERR_NUM) 
 {
     fetcher_.reset(new ThreadingFetcher(this));
     dns_resolver_.reset(new DNSResolver());
@@ -28,6 +32,15 @@ HttpClient::HttpClient(size_t max_conn_size, size_t max_req_size, size_t max_res
         struct in_addr * p_addr = &((struct sockaddr_in*)local_addr_)->sin_addr;
         assert(getifaddr(AF_INET, 0, eth_name, p_addr) == 0);
     }
+}
+
+void HttpClient::SetServConfig(ServChannel::ConcurencyMode mode, 
+    double max_err_rate, unsigned err_delay_sec, unsigned serv_max_err)
+{
+    serv_concurency_mode_ = mode;
+    serv_max_err_rate_    = max_err_rate;
+    serv_err_delay_sec_   = err_delay_sec;
+    serv_max_err_count_   = serv_max_err;
 }
 
 void* HttpClient::RunThread(void *contex) 
@@ -54,7 +67,7 @@ void HttpClient::PutResult(FetchErrorType error, IFetchMessage *message,
     Resource* res, void* contex)
 {
     boost::shared_ptr<FetchResult> result(
-        new FetchResult(error, message, res, contex));
+        new FetchResult(error, message, contex));
     if(result_cb_)
         result_cb_(result);
     else
@@ -74,9 +87,9 @@ void HttpClient::ProcessSuccResult(Resource* res, IFetchMessage *message)
     FetchErrorType fetch_ok(FETCH_FAIL_GROUP_OK, RS_OK);
     if(res->serv_)
         res->serv_->AddSucc();
-    PutResult(fetch_ok, message, res, res->contex_);
-    if(res->serv_ && res->serv_->queue_node_.empty())
-        FetchServ(res->serv_);
+    PutResult(fetch_ok, message, res->contex_);
+    channel_manager_->CheckServAvailable(res->serv_); 
+    Storage::Instance()->DestroyResource(res);
 }
 
 void HttpClient::ProcessFailResult(FetchErrorType fetch_error, 
@@ -95,9 +108,10 @@ void HttpClient::ProcessFailResult(FetchErrorType fetch_error,
             //TODO: try another server or delay try 
         }
     }
-    PutResult(fetch_error, message, res, res->contex_);
-    if(res->serv_ && res->serv_->queue_node_.empty())
-        FetchServ(res->serv_);
+    PutResult(fetch_error, message, res->contex_);
+    if(res->serv_)
+        channel_manager_->CheckServAvailable(res->serv_); 
+    Storage::Instance()->DestroyResource(res);
 }
 
 void HttpClient::HandleDnsResult(std::string err_msg, 
@@ -107,8 +121,9 @@ void HttpClient::HandleDnsResult(std::string err_msg,
     if(err_msg.empty())
     {
         host_channel->dns_err_cnt_ = 0;
-        ServChannel* serv_channel  = 
-            Storage::Instance()->AcquireServChannel(ai, host_channel->scheme_, local_addr_);
+        ServChannel* serv_channel  = Storage::Instance()->AcquireServChannel(
+            ai, host_channel->scheme_, local_addr_, 
+            );
         channel_manager_->SetServChannel(host_channel, serv_channel);
         if(!serv_channel->queue_node_.empty())
             __fetch_serv(serv_channel); 
@@ -266,18 +281,6 @@ bool HttpClient::PutRequest(
     return true;
 }
 
-bool HttpClient::PutRequest(Resource* res)
-{
-    if(cur_req_size_ > max_req_size_)
-    {
-        LOG_ERROR("[HttpClient] exceed max request size: %zd, %s\n", 
-        max_req_size_, res->GetUrl().c_str());
-        return false;
-    }
-    __handle_request(res);
-    return true;
-}
-
 void HttpClient::__update_curent_time()
 {
     timeval tv; 
@@ -325,28 +328,6 @@ void HttpClient::__fetch_resource(Resource* p_res)
     request.conn = p_res->conn_;
     request.context = p_res;
     fetcher_->PutRequest(request);
-}
-
-//handle wait list
-time_t HttpClient::CheckWaitList()
-{
-    __update_curent_time();
-    while(!fetcher_->IsOverload())
-    {
-        SpinGuard lock(wait_lst_lock_);
-        if(wait_lst_map_.empty())
-            break;
-        time_t timeout = 0;
-        ServChannel * serv_channel = NULL;
-        wait_lst_map_.get_front(timeout, serv_channel);
-        if(timeout > cur_time_)
-            return timeout - cur_time_;
-        wait_lst_map_.pop_front();
-        if(channel_manager_->WaitEmpty(serv_channel))
-            continue;
-        __fetch_serv(serv_channel);
-    }
-    return 0;
 }
 
 time_t HttpClient::__handle_timeout_list()
@@ -454,7 +435,7 @@ void HttpClient::Pool()
     while (fetcher_->GetResult(&fetch_result, &timeout) == 0) 
         ProcessResult(fetch_result);
     unsigned quota = fetcher_->AvailableQuota();
-    std::vector<Resource*> res_vec = channel_manager_->PopAvailableResources();
+    std::vector<Resource*> res_vec = channel_manager_->PopAvailableResources(quota);
     for(unsigned i = 0; i < res_vec.size(); i++)
         __fetch_resource(res_vec[i]);
     __handle_timeout_list();
