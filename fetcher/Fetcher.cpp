@@ -1002,9 +1002,10 @@ void* ThreadingFetcher::RunThread(void *context) {
     return 0;
 }
 
-bool ThreadingFetcher::IsOverload()
+unsigned ThreadingFetcher::AvailableQuota()
 {
-    return request_queue_.size() >= request_queue_max_; 
+    return request_queue_.size() >= request_queue_max_ ? 
+        0 : request_queue_max_ - request_queue_.size();
 }
 
 void ThreadingFetcher::Run() {

@@ -318,13 +318,13 @@ void HttpClient::__fetch_serv(ServChannel* serv)
 void HttpClient::__fetch_resource(Resource* p_res)
 {
     assert(p_res);
+    //进入内核后不再控制超时，从超时队列中删除
+    timed_lst_map_.del(*p_res);
     p_res->cur_retry_times_++;
     RawFetcherRequest request;
     request.conn = p_res->conn_;
     request.context = p_res;
     fetcher_->PutRequest(request);
-    //进入内核后不再控制超时，从超时队列中删除
-    timed_lst_map_.del(*p_res);
 }
 
 //handle wait list
@@ -453,7 +453,10 @@ void HttpClient::Pool()
     RawFetcherResult fetch_result;
     while (fetcher_->GetResult(&fetch_result, &timeout) == 0) 
         ProcessResult(fetch_result);
-    CheckWaitList();
+    unsigned quota = fetcher_->AvailableQuota();
+    std::vector<Resource*> res_vec = channel_manager_->PopAvailableResources();
+    for(unsigned i = 0; i < res_vec.size(); i++)
+        __fetch_resource(res_vec[i]);
     __handle_timeout_list();
 }
 

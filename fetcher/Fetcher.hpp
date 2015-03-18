@@ -241,7 +241,7 @@ class ThreadingFetcher : IFetcherEvents {
 	int GetConnCount(size_t *connecting, size_t *established, size_t * closed);
 	int GetTrafficBytes(uint64_t *rx_bytes, uint64_t *tx_bytes); 
 	int GetSockAddr(Connection* conn, struct sockaddr* addr) const;
-    bool IsOverload();
+    unsigned AvailableQuota();
 
     protected:
 	virtual bool FinishFetch(Connection* conn, void *request_context, IFetchMessage *message);

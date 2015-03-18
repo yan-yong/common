@@ -63,10 +63,11 @@ private:
 protected:
     static  void* RunThread(void *context);
     void UpdateBatchConfig(std::string&, const BatchConfig&);
-    void PutResult(FetchErrorType, IFetchMessage*, Resource*, void*);
     void FetchServ(ServChannel* serv_channel);
     void Pool();
+    void PutResult(FetchErrorType, IFetchMessage*, Resource*, void*);
     time_t CheckWaitList();
+
     virtual struct RequestData* CreateRequestData(void *);
     virtual void FreeRequestData(struct RequestData *);
     virtual IFetchMessage* CreateFetchResponse(const FetchAddress&, void *);

@@ -7,14 +7,19 @@
 /*** function **/
 class ChannelManager
 {
-    DECLARE_SINGLETON(ChannelManager)
+    DECLARE_SINGLETON(ChannelManager);
+    typedef linked_list_map<time_t, ServChannel, &ServChannel::queue_node_> ServWaitMap;
+
 private:
     HostCacheList host_cache_lst_;
-    SpinLock host_cache_lock_; 
-    unsigned host_cache_cnt_;
+    SpinLock      host_cache_lock_; 
+    unsigned      host_cache_cnt_;
     ServCacheList serv_cache_lst_;
-    SpinLock serv_cache_lock_; 
-    unsigned serv_cache_cnt_;
+    SpinLock      serv_cache_lock_; 
+    unsigned      serv_cache_cnt_;
+    ServWaitMap   serv_wait_lst_map_;
+    SpinLock      serv_wait_lock_;  
+    time_t        min_ready_time_;
 
 protected:
     void __update_serv_host_state(HostChannel* host_channel);
@@ -47,61 +52,26 @@ protected:
     {
         return host_channel->res_wait_queue_.empty();
     }
-    //cache operation
-    void check_add_cache(ServChannel* serv_channel)
-    {
-        if(__empty(serv_channel) && (serv_channel->cache_node_).empty())
-        {
-            SpinGuard guard(serv_cache_lock_);
-            serv_cache_lst_.add_back(*serv_channel);
-            serv_cache_cnt_++;
-        }
-    }
-    void check_add_cache(HostChannel* host_channel)
-    {
-        if(__empty(host_channel) && host_channel->cache_node_.empty())
-        {
-            SpinGuard guard(host_cache_lock_);
-            host_cache_lst_.add_back(*host_channel);
-            host_cache_cnt_++;
-        }
-    }
-    void check_remove_cache(ServChannel* serv_channel)
-    {
-        if(!__empty(serv_channel) && !serv_channel->cache_node_.empty())
-        {
-            SpinGuard guard(serv_cache_lock_);
-            ServCacheList::del(*serv_channel);
-            serv_cache_cnt_--;
-        }
-    }
-    void check_remove_cache(HostChannel* host_channel)
-    {
-        if(!__empty(host_channel) && !host_channel->cache_node_.empty())
-        {
-            SpinGuard guard(host_cache_lock_);
-            HostCacheList::del(*host_channel);
-            host_cache_cnt_--;
-        }
-    }
+
+protected:
+    void CheckAddCache(ServChannel* serv_channel);
+    void CheckAddCache(HostChannel* host_channel);
+    void CheckRemoveCache(ServChannel* serv_channel);
+    void CheckRemoveCache(HostChannel* host_channel);
+    Resource* PopResource(ServChannel* serv_channel);
+    std::vector<Resource*> PopAvailableResources(ServChannel*, 
+        std::vector<Resource*>&);
+    std::vector<Resource*> PopAvailableResources(unsigned max_count);
 
 public:
+    unsigned GetHostCacheSize() { return host_cache_cnt_;}
+    unsigned GetServCacheSize() { return serv_cache_cnt_;}
+
     bool WaitEmpty(ServChannel* serv_channel);
+    bool HasAvailableResource(); 
     void SetServChannel(HostChannel*, ServChannel *);
     void DestroyChannel(HostChannel* host_channel);
     void DestroyChannel(ServChannel* serv_channel);
-    void AddResource(Resource* res);
-    unsigned GetHostCacheSize() { return host_cache_cnt_;}
-    unsigned GetServCacheSize() { return serv_cache_cnt_;}
-    HostCacheList PopHostCache(unsigned cnt);
-    ServCacheList PopServCache(unsigned cnt);
-    void SetFetchIntervalMs(HostChannel*, unsigned);
-    void RemoveResource(Resource*);
-    //Resource* PopResource(HostChannel* host_channel);
-    //Resource* PopResource(ServChannel* serv_channel);
-    Resource* PopAvailableResource(ServChannel* serv_channel);
-    std::string ToString(HostChannel* host_channel) const;
-    bool ConnectionAvailable(ServChannel* serv_channel);
     ServChannel* CreateServChannel(
         char scheme, struct addrinfo* ai, 
         ServChannel::ServKey serv_key, unsigned max_err_rate, 
@@ -110,9 +80,16 @@ public:
     HostChannel* CreateHostChannel(
         char scheme, const std::string& host, unsigned port, 
         HostChannel::HostKey host_key, unsigned fetch_interval_ms);
+
+    void AddResource(Resource* res);
+    void RemoveResource(Resource*);
+    void ReleaseConnection(Resource* res);
+    void SetFetchIntervalMs(HostChannel*, unsigned);
+    std::string ToString(HostChannel* host_channel) const;
     ResourceList RemoveUnfinishRes(ServChannel* serv_channel);
     ResourceList RemoveUnfinishRes(HostChannel* host_channel);
-    void ReleaseConnection(Resource* res);
+    HostCacheList PopHostCache(unsigned cnt);
+    ServCacheList PopServCache(unsigned cnt);
 };
 
 #endif 

@@ -76,7 +76,10 @@ struct ServChannel
     //统计对端服务器答复的快慢
     StasticCount<double, 10> resp_time_;
     //该serv的国内外属性
-    char is_foreign_: 1;
+    unsigned char is_foreign_: 1;
+    //该serv连续失败的次数
+    unsigned char err_count_ : 1;
+    uint16_t err_delay_sec_;
     //并发模式
     ConcurencyMode concurency_mode_;
     //连接池
@@ -102,7 +105,7 @@ struct ServChannel
 
     //fetch_interval_ms为抓取的间隔时间, 单位为毫秒
     ServChannel():
-        fetch_time_ms_(0), is_foreign_(0), 
+        fetch_time_ms_(0), is_foreign_(0), err_count_(0), err_delay_sec_(0), 
         concurency_mode_(DEFAULT_CONCURENCY_MODE), fetch_interval_ms_(0), 
         max_err_rate_(DEFAULT_MAX_ERR_RATE), serv_key_(0),
         pres_wait_queue_(NULL)
@@ -110,7 +113,10 @@ struct ServChannel
 
     time_t GetReadyTime() const
     {
-        return fetch_time_ms_ + fetch_interval_ms_;
+        unsigned delay_time = err_delay_sec_*(2 << err_count_)*1000;
+        if(delay_time < fetch_interval_ms_)
+            delay_time = fetch_interval_ms_;
+        return fetch_time_ms_ + delay_time;
     }
     void SetFetchTime(time_t cur_time)
     {
@@ -118,6 +124,8 @@ struct ServChannel
     }
     void AddSucc()
     {
+        if(err_count_)
+            err_count_ = 0;
         err_rate_.Add(0.0);
     }
     void AddFail()
