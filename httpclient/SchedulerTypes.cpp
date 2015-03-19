@@ -115,6 +115,14 @@ const char* GetSpiderError(int code)
     return "";
 }
 
+std::string GetSpiderError(FetchErrorType err)
+{
+    std::string err_msg = GetFetchErrorGroupName(err.group());
+    err_msg += ": ";
+    err_msg += GetSpiderError(err.error_num());
+    return err_msg;
+}
+
 //user_headers在外部开内存, 浅拷贝
 void Resource::Initialize(
     HostChannel* host_channel,const std::string& suffix, 

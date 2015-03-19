@@ -265,6 +265,7 @@ private:
 const char* GetFetchErrorGroupName(int gid);
 const char* GetSpiderError(int code);
 const char* GetSpiderError(FETCH_ERROR code);
+std::string GetSpiderError(FetchErrorType error);
 
 inline time_t current_time_ms()
 {

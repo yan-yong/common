@@ -20,7 +20,7 @@ enum
     PROTOCOL_HTTPS = 1
 };
 
-#define protocal2str(protocal) (protocal == PROTOCOL_HTTPS ? "https":"http");
+#define protocal2str(protocal) (protocal == PROTOCOL_HTTPS ? "https":"http")
 #define str2protocal(scheme)   (scheme == "https" ? PROTOCOL_HTTPS:PROTOCOL_HTTP)
 
 class HttpFetcherRequest : public FetcherRequest, public Request

@@ -83,6 +83,7 @@ void HttpClient::ProcessSuccResult(Resource* res, IFetchMessage *message)
 {
     __sync_fetch_and_sub(&cur_req_size_, 1);
     FetchErrorType fetch_ok(FETCH_FAIL_GROUP_OK, RS_OK);
+    LOG_INFO("%s, SUCCESS\n", res->GetUrl().c_str());
     if(res->serv_)
         res->serv_->AddSucc();
     PutResult(fetch_ok, message, res->contex_);
@@ -93,6 +94,8 @@ void HttpClient::ProcessFailResult(FetchErrorType fetch_error,
     Resource* res, IFetchMessage *message)
 {
     __sync_fetch_and_sub(&cur_req_size_, 1);
+    LOG_ERROR("%s, ERROR, %s\n", res->GetUrl().c_str(), 
+        GetSpiderError(fetch_error).c_str());
     if(res->serv_ && fetch_error.group() == FETCH_FAIL_GROUP_SERVER)
     {
         res->serv_->AddFail();
@@ -121,6 +124,7 @@ void HttpClient::HandleDnsResult(DnsResultType dns_result)
         return;
     if(err_msg.empty())
     {
+        LOG_INFO("%s, DNS resolve success.\n", host_channel->host_.c_str());
         ServChannel* serv_channel  = Storage::Instance()->AcquireServChannel(
             host_channel->scheme_, ai, 
             serv_concurency_mode_, serv_max_err_rate_,
@@ -131,6 +135,8 @@ void HttpClient::HandleDnsResult(DnsResultType dns_result)
         return;
     }
     //dns resolve error
+    LOG_ERROR("%s, DNS resolve error, %s\n", host_channel->host_.c_str(),
+        err_msg.c_str());
     ResourceList res_lst = channel_manager_->RemoveUnfinishRes(host_channel);
     while(!res_lst.empty())
     {
@@ -167,7 +173,7 @@ void HttpClient::HandleHttpResponse2xx(Resource* res, HttpFetcherResponse *resp)
 {
     char error_msg[100];
     if(resp->ContentEncoding(error_msg) != 0)
-        LOG_ERROR("%s ContentEncoding error: %s", res->RootUrl().c_str(), error_msg);
+        LOG_ERROR("%s, ContentEncoding error, %s", res->RootUrl().c_str(), error_msg);
     if (resp->SizeExceeded())
     {
         FetchErrorType fetch_error(FETCH_FAIL_GROUP_RULE, RS_INVALID_PAGESIZE);
@@ -243,6 +249,7 @@ REDIRECT_TYPE HttpClient::__get_redirect_type(int status_code)
 
 void HttpClient::__handle_request(Resource* res)
 {
+    LOG_INFO("%s, RECV request.\n", res->GetUrl().c_str()); 
     __sync_fetch_and_add(&cur_req_size_, 1);
     channel_manager_->AddResource(res);
     //dns不知, 则先去解dns
@@ -253,7 +260,8 @@ void HttpClient::__handle_request(Resource* res)
         DNSResolver::ResolverCallback dns_resolver_cb = 
             boost::bind(&HttpClient::PutDnsResult, this, _1);
         dns_resolver_->Resolve(host_channel->host_, host_channel->port_, 
-            dns_resolver_cb, host_key); 
+            dns_resolver_cb, host_key);
+        LOG_INFO("%s, request DNS\n", host_channel->host_.c_str()); 
         return;
     }
      //加入到超时队列中, 0表示不超时
@@ -271,8 +279,8 @@ bool HttpClient::PutRequest(
 {
     if(cur_req_size_ > max_req_size_)
     {
-        LOG_ERROR("[HttpClient] exceed max request size: %zd, %s\n", 
-            max_req_size_, url.c_str());
+        LOG_ERROR("%s, exceed max request size: %zd\n", 
+            url.c_str(), max_req_size_);
         return false;
     }
     BatchConfig * batch_cfg = Storage::Instance()->AcquireBatchCfg(batch_id);
@@ -280,7 +288,7 @@ bool HttpClient::PutRequest(
         batch_cfg, prior, user_headers, NULL);
     if(!res)
     {
-        LOG_ERROR("[HttpClient] invalid uri: %s\n", url.c_str());
+        LOG_ERROR("%s, invalid uri\n", url.c_str());
         return false; 
     }
     __handle_request(res);
@@ -359,6 +367,7 @@ struct RequestData* HttpClient::CreateRequestData(void * request_context)
     for(unsigned i = 0; i < user_headers->Size(); i++)
         req->Headers.Set((*user_headers)[i].Name, (*user_headers)[i].Value);
     req->Close();
+    LOG_INFO("%s, FETCH request\n", req->Uri.c_str());
     return req; 
 }
 
@@ -413,7 +422,7 @@ void HttpClient::Pool()
     __update_curent_time();
     //handle  dns result
     DnsResultType dns_result;
-    while(!dns_queue_.try_dequeue(dns_result))
+    while(dns_queue_.try_dequeue(dns_result))
         HandleDnsResult(dns_result);
     //handle fetch result
     RawFetcherResult fetch_result;

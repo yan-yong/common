@@ -275,8 +275,7 @@ void ChannelManager::RemoveResource(Resource* res)
         res->host_ = NULL;
         res->serv_ = NULL;
     }
-    if(serv_channel)
-        CheckServReady(serv_channel);
+    CheckServReady(serv_channel);
 }
 
 HostCacheList ChannelManager::PopHostCache(unsigned cnt)
@@ -403,7 +402,7 @@ std::vector<Resource*> ChannelManager::PopAvailableResources(unsigned max_count)
 //注意： 这个函数不能被其它锁包围
 void ChannelManager::CheckServReady(ServChannel * serv_channel)
 {
-    if(!__wait_empty(serv_channel) && 
+    if(serv_channel && !__wait_empty(serv_channel) && 
         serv_channel->conn_storage_.size() && 
         (serv_channel->queue_node_).empty() )
     {
@@ -423,16 +422,14 @@ void ChannelManager::CheckServReady(ServChannel * serv_channel)
 
 std::string ChannelManager::ToString(HostChannel* host_channel) const
 {
-    std::string cont = protocal2str(host_channel->scheme_) + 
-        "://" + host_channel->host_;
+    char buf[2048];
+    size_t sz = snprintf(buf, 2048, "%s://%s", protocal2str(host_channel->scheme_), (host_channel->host_).c_str());
     if(!IsHttpDefaultPort(host_channel->scheme_, 
                 host_channel->port_))
     {
-        char port_str[10];
-        snprintf(port_str, 10, ":%hu", host_channel->port_);
-        cont += port_str;
+        snprintf(buf + sz, 2048 - sz, ":%hu", host_channel->port_);
     }
-    return cont;
+    return buf;
 }
 
 ServChannel* ChannelManager::CreateServChannel(
