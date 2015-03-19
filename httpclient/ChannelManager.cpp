@@ -47,7 +47,8 @@ Connection* ChannelManager::__acquire_connection(ServChannel* serv_channel)
 
 void ChannelManager::CheckAddCache(ServChannel* serv_channel)
 {
-    if(__empty(serv_channel) && (serv_channel->cache_node_).empty())
+    if(serv_channel && __empty(serv_channel) && 
+        (serv_channel->cache_node_).empty())
     {
         SpinGuard guard(serv_cache_lock_);
         serv_cache_lst_.add_back(*serv_channel);
@@ -67,7 +68,8 @@ void ChannelManager::CheckAddCache(HostChannel* host_channel)
 
 void ChannelManager::CheckRemoveCache(ServChannel* serv_channel)
 {
-    if(!__empty(serv_channel) && !serv_channel->cache_node_.empty())
+    if(serv_channel && !__empty(serv_channel) &&
+        !serv_channel->cache_node_.empty())
     {
         SpinGuard guard(serv_cache_lock_);
         ServCacheList::del(*serv_channel);
@@ -98,7 +100,7 @@ void ChannelManager::SetServChannel(HostChannel* host_channel, ServChannel * ser
     {
         SpinGuard serv_guard(__serv_lock(last_serv));
         SpinGuard host_guard(host_channel->lock_);
-        if(serv_channel->serv_key_ == last_serv->serv_key_)
+        if(last_serv && serv_channel->serv_key_ == last_serv->serv_key_)
             return;
         HostChannelList::del(*host_channel);
         CheckAddCache(last_serv);
@@ -115,7 +117,7 @@ void ChannelManager::SetServChannel(HostChannel* host_channel, ServChannel * ser
             serv_channel->fetch_interval_ms_ = host_channel->fetch_interval_ms_;
         }
         __update_serv_host_state(host_channel);
-        host_channel->update_time_ = time(NULL);
+        host_channel->update_time_ = current_time_ms();
         CheckRemoveCache(serv_channel);
     }
     //** 检查serv是否ready
@@ -446,7 +448,7 @@ ServChannel* ChannelManager::CreateServChannel(
     serv->max_err_count_ = max_err_count;
     serv->err_delay_sec_ = err_delay_sec;
     struct addrinfo * cur_ai = ai;
-    while(!cur_ai)
+    while(cur_ai)
     {
         FetchAddress fetch_addr;
         fetch_addr.remote_addr    = cur_ai->ai_addr;

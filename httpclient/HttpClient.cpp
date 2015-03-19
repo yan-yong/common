@@ -37,6 +37,7 @@ HttpClient::HttpClient(
         struct in_addr * p_addr = &((struct sockaddr_in*)local_addr_)->sin_addr;
         assert(getifaddr(AF_INET, 0, eth_name, p_addr) == 0);
     }
+    dns_resolver_->Open();
 }
 
 void HttpClient::SetServConfig(ServChannel::ConcurencyMode mode, 
@@ -59,6 +60,7 @@ void* HttpClient::RunThread(void *contex)
 void HttpClient::Close()
 {
     stopped_ = true;
+    dns_resolver_->Close(); 
     pthread_join(tid_, NULL);
 }
 

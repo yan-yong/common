@@ -28,3 +28,4 @@ deps
 *.swo
 *.swk
 *.bak
+core.*

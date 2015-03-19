@@ -36,9 +36,9 @@ public:
 protected:
     struct RequestItem
     {
-        ResolverCallback& callback_;
+        ResolverCallback callback_;
         const void* contex_;
-        RequestItem(ResolverCallback& callback, const void* contex):
+        RequestItem(ResolverCallback callback, const void* contex):
             callback_(callback), contex_(contex)
         {}
     };
@@ -89,7 +89,7 @@ public:
     int Open(std::string filename = "");
   
     void Resolve(const std::string& host, uint16_t port,
-        ResolverCallback& cb, const void* contex);
+        ResolverCallback cb, const void* contex);
 };
 
 #endif

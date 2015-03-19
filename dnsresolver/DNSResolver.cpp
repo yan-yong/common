@@ -27,15 +27,15 @@ void DNSResolver::__internal_callback(int errcode, struct evutil_addrinfo *addr,
 {
     struct RequestItem* request = (struct RequestItem*)contex;
     const void* user_contex = request->contex_;
-    ResolverCallback& cb = request->callback_;
     if(errcode)
     {
         DnsResultType dns_result(new ResultItem(
             evutil_gai_strerror(errcode), NULL, request->contex_));
-        cb(dns_result); 
+        request->callback_(dns_result); 
         delete request;
         return;
     }
+
     struct addrinfo *dns_ret = NULL;
     struct addrinfo *last_ai = NULL;
     for (struct evutil_addrinfo *ai = addr; ai; ai = ai->ai_next) 
@@ -51,11 +51,10 @@ void DNSResolver::__internal_callback(int errcode, struct evutil_addrinfo *addr,
             last_ai = last_ai->ai_next;
         }
     }
-    delete request;
     evutil_freeaddrinfo(addr);
-
     DnsResultType dns_result(new ResultItem("", dns_ret, user_contex));
-    cb(dns_result); 
+    request->callback_(dns_result); 
+    delete request;
 }
 
 int DNSResolver::Open(std::string filename)
@@ -76,7 +75,7 @@ int DNSResolver::Open(std::string filename)
 }
 
 void DNSResolver::Resolve(const std::string& host, uint16_t port,
-        ResolverCallback& cb, const void* contex)
+        ResolverCallback cb, const void* contex)
 {
     printf("put %s\n", host.c_str());
     char port_str[10];

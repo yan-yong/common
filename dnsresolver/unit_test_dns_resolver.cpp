@@ -38,6 +38,7 @@ int main()
 {
     DNSResolver resolver;
     assert(resolver.Open("./resolv.conf") == 0);
+    //resolver.Open("");
     std::string host[] = 
     {
         "www.bing1.com.cn"
