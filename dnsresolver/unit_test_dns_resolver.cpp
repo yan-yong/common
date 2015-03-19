@@ -3,8 +3,11 @@
 #include <arpa/inet.h>
 #include "DNSResolver.hpp"
 
-void fun(std::string err_msg, struct addrinfo *ai, const void* contex)
+void fun(DNSResolver::DnsResultType dns_result)
 {
+    std::string err_msg = dns_result->err_msg_;
+    struct addrinfo *ai = dns_result->ai_;
+    const void* contex  = dns_result->contex_;
     if(ai)
     {
         while(ai)

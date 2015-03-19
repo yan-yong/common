@@ -29,7 +29,7 @@ public:
 
         FetchResult(FetchErrorType error, 
             IFetchMessage *resp, void* contex): 
-            error_(error), res_(res),  contex_(contex)
+            error_(error), resp_(resp),  contex_(contex)
         {}
         ~FetchResult()
         {
@@ -41,12 +41,13 @@ public:
     typedef boost::shared_ptr<FetchResult> ResultPtr;
     typedef boost::function<void (ResultPtr) > ResultCallback;
     typedef CQueue<ResultPtr > ResultQueue;
+    typedef DNSResolver::DnsResultType DnsResultType;
+    typedef CQueue<DnsResultType > DnsResultQueue;
 
 private:
     static const unsigned DEFAULT_REQUEST_SIZE = 1000000;
     static const unsigned DEFAULT_RESULT_SIZE  = 1000000;
     typedef linked_list_map<time_t, ServChannel, &ServChannel::queue_node_> ServWaitMap;
-    typedef linked_list_map<time_t, Resource, &Resource::timed_lst_node_> ResTimedMap;
 
 private:
     void __fetch_resource(Resource* p_res);
@@ -61,6 +62,7 @@ protected:
     void UpdateBatchConfig(std::string&, const BatchConfig&);
     void Pool();
     void PutResult(FetchErrorType, IFetchMessage*, void*);
+    void PutDnsResult(DnsResultType dns_result);
 
     virtual struct RequestData* CreateRequestData(void *);
     virtual void FreeRequestData(struct RequestData *);
@@ -70,14 +72,16 @@ protected:
     virtual void ProcessResult(RawFetcherResult&);
     virtual void ProcessSuccResult(Resource*, IFetchMessage*);
     virtual void ProcessFailResult(FetchErrorType, Resource*, IFetchMessage*);
-    virtual void HandleDnsResult(std::string, struct addrinfo*, const void*);
+    virtual void HandleDnsResult(DnsResultType dns_result);
     virtual void HandleRedirectResult(Resource*, HttpFetcherResponse*, RedirectInfo);
     virtual void HandleHttpResponse3xx(Resource*, HttpFetcherResponse *);
     virtual void HandleHttpResponse2xx(Resource*, HttpFetcherResponse *);
 
 public:
-    HttpClient(size_t max_conn_size, size_t max_req_size, 
-        size_t max_result_size, const char* eth_name = NULL);
+    HttpClient(
+        size_t max_req_size    = DEFAULT_REQUEST_SIZE,
+        size_t max_result_size = DEFAULT_RESULT_SIZE,
+        const char* eth_name   = NULL);
     void SetResultCallback(ResultCallback call_cb);
     virtual bool PutRequest(
        const std::string& url,
@@ -100,6 +104,7 @@ private:
     //超时队列, 精度为秒
     ResTimedMap  timed_lst_map_;
     ResultQueue  result_queue_;
+    DnsResultQueue dns_queue_;
     size_t max_req_size_;
     size_t max_result_size_;
     volatile size_t cur_req_size_;

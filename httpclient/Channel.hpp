@@ -21,7 +21,6 @@ struct HostChannel
     static const unsigned DEFAULT_DNS_ERROR_WAIT_SEC = 10;
 
     unsigned char scheme_;
-    unsigned char dns_err_cnt_; 
     uint16_t port_;
     std::string host_;
     HostKey     host_key_;
@@ -39,7 +38,7 @@ struct HostChannel
     SpinLock    lock_;
 
     HostChannel(): 
-        scheme_(PROTOCOL_HTTP), dns_err_cnt_(0), port_(80), 
+        scheme_(PROTOCOL_HTTP), port_(80), 
         host_key_(0), serv_(NULL), fetch_interval_ms_(0), 
         ref_cnt_(0), update_time_(0)
     {}
@@ -100,11 +99,11 @@ struct ServChannel
     ResourceList fetching_lst_;
     ServKey serv_key_;
     SpinLock    lock_;
-    //待抓取的host列表
+    //不固定serv的res --> 待抓取的host列表
     HostChannelList wait_host_lst_;
-    //空闲的host列表
+    //不固定serv的res --> 空闲的host列表
     HostChannelList idle_host_lst_;
-    //直接挂到serv下等待的res
+    //固定serv的res
     ResPriorQueue * pres_wait_queue_;
 
     //fetch_interval_ms为抓取的间隔时间, 单位为毫秒

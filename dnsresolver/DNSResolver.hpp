@@ -11,12 +11,27 @@
 #include <assert.h>
 #include <boost/bind.hpp>
 #include <boost/function.hpp>
-
+#include <boost/shared_ptr.hpp>
 
 class DNSResolver
 {
 public:
-    typedef boost::function<void (std::string, struct addrinfo*, const void*)> ResolverCallback;
+    struct ResultItem
+    {
+        std::string      err_msg_;
+        struct addrinfo* ai_;
+        const void*      contex_;
+        ResultItem(std::string err_msg, struct addrinfo* ai, 
+            const void* contex):
+            err_msg_(err_msg), ai_(ai), contex_(contex)
+        {}
+        ~ResultItem()
+        {
+            freeaddrinfo(ai_);
+        }
+    };
+    typedef boost::shared_ptr<ResultItem> DnsResultType;
+    typedef boost::function<void (DnsResultType)> ResolverCallback;
 
 protected:
     struct RequestItem

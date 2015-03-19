@@ -1,8 +1,15 @@
 #include "HttpClient.hpp"
 
+void HandleResult(boost::shared_ptr<HttpClient::FetchResult>)
+{
+
+}
+
 int main()
 {
-    HttpClient::ResultCallback result_cb;
     HttpClient http_client;
-    http_client.SetResultCallback(result_cb);
+    http_client.SetResultCallback(HandleResult);
+    http_client.PutRequest("http://www.baidu.com/");
+
+    return 0;
 }

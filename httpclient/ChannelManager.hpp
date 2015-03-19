@@ -17,8 +17,8 @@ private:
     ServCacheList serv_cache_lst_;
     SpinLock      serv_cache_lock_; 
     unsigned      serv_cache_cnt_;
-    ServWaitMap   serv_wait_lst_map_;
-    SpinLock      serv_wait_lock_;  
+    ServWaitMap   serv_ready_lst_map_;
+    SpinLock      serv_ready_lock_;  
     time_t        min_ready_time_;
 
 protected:
@@ -58,10 +58,10 @@ protected:
     void CheckAddCache(HostChannel* host_channel);
     void CheckRemoveCache(ServChannel* serv_channel);
     void CheckRemoveCache(HostChannel* host_channel);
+    void CheckServReady(ServChannel * serv_channel);
     Resource* PopResource(ServChannel* serv_channel);
     std::vector<Resource*> PopAvailableResources(ServChannel*, 
-        std::vector<Resource*>&);
-    std::vector<Resource*> PopAvailableResources(unsigned max_count);
+        std::vector<Resource*>&, unsigned max_count);
 
 public:
     unsigned GetHostCacheSize() { return host_cache_cnt_;}
@@ -77,10 +77,11 @@ public:
         ServChannel::ServKey serv_key, 
         ServChannel::ConcurencyMode concurency_mode, 
         unsigned max_err_rate, unsigned max_err_count,
-        struct sockaddr* local_addr);
+        unsigned err_delay_sec, struct sockaddr* local_addr);
     HostChannel* CreateHostChannel(
         char scheme, const std::string& host, unsigned port, 
-        HostChannel::HostKey host_key, unsigned fetch_interval_ms);
+        HostChannel::HostKey host_key, 
+        unsigned fetch_interval_ms);
 
     void AddResource(Resource* res);
     void RemoveResource(Resource*);
@@ -91,6 +92,8 @@ public:
     ResourceList RemoveUnfinishRes(HostChannel* host_channel);
     HostCacheList PopHostCache(unsigned cnt);
     ServCacheList PopServCache(unsigned cnt);
+    std::vector<Resource*> PopAvailableResources(unsigned max_count);
 };
+
 
 #endif 

@@ -74,6 +74,7 @@ public:
 
     void UpdateBatchConfig(std::string& batch_id, const BatchConfig& cfg);
     ServChannel* GetServChannel(ServKey serv_key) const;
+    HostChannel* GetHostChannel(HostKey host_key) const;
     unsigned GetHostSpeed(const std::string& host) const;
     void SetHostSpeed(const std::string& host, unsigned fetch_interval_ms);
     void CheckCacheLimit();
@@ -93,13 +94,11 @@ public:
         );
 
     ServChannel* AcquireServChannel(
-        struct addrinfo* ai,
         char   scheme,
+        struct addrinfo* ai,
         ServChannel::ConcurencyMode concurency_mode, 
         double max_err_rate, unsigned max_err_count,
-        struct sockaddr* local_addr,
-        unsigned err_delay_sec,
-        struct sockaddr* local_addr);
+        unsigned err_delay_sec, struct sockaddr* local_addr);
 
     Resource* CreateResource(
             const   std::string& url,

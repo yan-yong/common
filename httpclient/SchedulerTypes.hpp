@@ -9,6 +9,7 @@
 #include "httpparser/URI.hpp"
 #include "httpparser/HttpMessage.hpp"
 #include "linklist/linked_list.hpp"
+#include "linklist/linked_list_map.hpp"
 #include "fetcher/Fetcher.hpp"
 
 enum ResourcePriority 
@@ -226,6 +227,8 @@ public:
     BatchConfig *      cfg_;
     void*              extend_[0]; 
 };
+
+typedef linked_list_map<time_t, Resource, &Resource::timed_lst_node_> ResTimedMap;
 
 struct ResExtend
 {

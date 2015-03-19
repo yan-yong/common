@@ -1,5 +1,7 @@
 #include "Storage.hpp"
 
+DEFINE_SINGLETON(Storage);
+
 int Storage::__aicmp(const struct addrinfo *ai1, const struct addrinfo *ai2) 
 {
     if (ai1->ai_addrlen == ai2->ai_addrlen)
@@ -156,12 +158,10 @@ void Storage::UpdateBatchConfig(std::string& batch_id, const BatchConfig& cfg)
 }
 
 ServChannel* Storage::AcquireServChannel(
-        struct addrinfo* ai, 
-        char   scheme,
+        char   scheme, struct addrinfo* ai, 
         ServChannel::ConcurencyMode concurency_mode, 
         double max_err_rate, unsigned max_err_count,
-        unsigned err_delay_sec,
-        struct sockaddr* local_addr )
+        unsigned err_delay_sec, struct sockaddr* local_addr )
 {
     ServKey serv_key = __aigetkey(ai, scheme, local_addr); 
     {
@@ -172,8 +172,9 @@ ServChannel* Storage::AcquireServChannel(
     }
 
     WriteGuard guard(serv_map_lock_);
-    ServChannel* serv_channel = channel_manager_->CreateServChannel(scheme, ai, 
-            serv_key, max_err_rate, concurency_mode, local_addr);
+    ServChannel* serv_channel = channel_manager_->CreateServChannel(
+        scheme, ai, serv_key, concurency_mode, max_err_rate, 
+        max_err_count, err_delay_sec, local_addr);
     serv_map_.insert(ServMap::value_type(serv_key, serv_channel));
     return serv_channel;
 }
@@ -183,6 +184,15 @@ ServChannel* Storage::GetServChannel(ServKey serv_key) const
     ReadGuard guard(serv_map_lock_);
     ServMap::const_iterator it = serv_map_.find(serv_key);
     if(it != serv_map_.end())
+        return it->second;
+    return NULL; 
+}
+
+HostChannel* Storage::GetHostChannel(HostKey host_key) const
+{
+    ReadGuard guard(host_map_lock_);
+    HostMap::const_iterator it = host_map_.find(host_key);
+    if(it != host_map_.end())
         return it->second;
     return NULL; 
 }
