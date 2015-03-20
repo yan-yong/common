@@ -33,6 +33,7 @@ class HttpFetcherRequest : public FetcherRequest, public Request
 	    Request::Clear();
 	}
 	virtual void Close();
+    void Dump();
 };
 
 class HttpFetcherResponse : public FetcherResponse, public Response

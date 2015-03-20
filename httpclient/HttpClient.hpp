@@ -82,7 +82,6 @@ public:
         size_t max_req_size    = DEFAULT_REQUEST_SIZE,
         size_t max_result_size = DEFAULT_RESULT_SIZE,
         const char* eth_name   = NULL);
-    void SetResultCallback(ResultCallback call_cb);
     virtual bool PutRequest(
        const std::string& url,
        void*  contex = NULL,
@@ -90,9 +89,12 @@ public:
        ResourcePriority prior = BatchConfig::DEFAULT_RES_PRIOR,
        std::string batch_id   = BatchConfig::DEFAULT_BATCH_ID);
     //virtual bool PutRequest(Resource* res);
+    virtual void Open();
     virtual void Close();
+    void SetResultCallback(ResultCallback call_cb);
     void SetServConfig(ServChannel::ConcurencyMode, double, 
         unsigned, unsigned);
+    void SetFetcherParams(Fetcher::Params params);
 
 private:
     boost::shared_ptr<ThreadingFetcher> fetcher_;
@@ -121,6 +123,9 @@ private:
     double   serv_max_err_rate_;
     unsigned serv_err_delay_sec_;
     unsigned serv_max_err_count_;
+
+    //fetcher配置
+    Fetcher::Params fetcher_params_;
 };
 
 #endif

@@ -54,6 +54,18 @@ void HttpFetcherRequest::Close()
     FetcherRequest::Close();
 }
 
+void HttpFetcherRequest::Dump()
+{
+    static unsigned idx = 0;
+    char file_name[100];
+    snprintf(file_name, 100, "%u.dump", idx++);
+    FILE* fid = fopen(file_name, "w"); 
+    for(int i = 0; i < count; i++) 
+    {
+        fwrite();
+    }
+}
+
 int HttpFetcherResponse::OnHeadersComplete()
 {
     int n = Headers.Find("Transfer-Encoding");

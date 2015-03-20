@@ -108,6 +108,7 @@ class Fetcher {
 					    // connect, read
 	    unsigned int rx_speed_max;      // 最大入流量，bytes/seconds
 					    // 超过此流量时read会阻塞，强行降低入流量
+        unsigned int max_connecting_cnt;// 最大并发连接数目
 	};
 
     public:
@@ -193,7 +194,6 @@ class Fetcher {
 	void RemoveErrorConn(Connection *conn, int error);
 	void Exit();
 	void UpdateTime(time_t cur_time);
-    void IsOverload();
 
     protected:
 	IMessageEvents* message_events_;
@@ -273,6 +273,7 @@ class ThreadingFetcher : IFetcherEvents {
 	pthread_t tid_;
 
 	boost::shared_ptr<Fetcher> fetcher_;
+    bool param_changed_;
 };
 
 #endif   /* ----- #ifndef FETCHER_INC  ----- */

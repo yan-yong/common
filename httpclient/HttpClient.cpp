@@ -37,7 +37,13 @@ HttpClient::HttpClient(
         struct in_addr * p_addr = &((struct sockaddr_in*)local_addr_)->sin_addr;
         assert(getifaddr(AF_INET, 0, eth_name, p_addr) == 0);
     }
+    memset(&fetcher_params_, 0, sizeof(fetcher_params_));
+}
+
+void HttpClient::Open()
+{
     dns_resolver_->Open();
+    fetcher_->Begin(fetcher_params_);
 }
 
 void HttpClient::SetServConfig(ServChannel::ConcurencyMode mode, 
@@ -47,6 +53,12 @@ void HttpClient::SetServConfig(ServChannel::ConcurencyMode mode,
     serv_max_err_rate_    = max_err_rate;
     serv_err_delay_sec_   = err_delay_sec;
     serv_max_err_count_   = serv_max_err;
+}
+
+void HttpClient::SetFetcherParams(Fetcher::Params params)
+{
+    memcpy(&fetcher_params_, &params, sizeof(params));
+    fetcher_->UpdateParams(fetcher_params_);
 }
 
 void* HttpClient::RunThread(void *contex) 
@@ -60,6 +72,7 @@ void* HttpClient::RunThread(void *contex)
 void HttpClient::Close()
 {
     stopped_ = true;
+    fetcher_->End();
     dns_resolver_->Close(); 
     pthread_join(tid_, NULL);
 }
@@ -366,7 +379,7 @@ struct RequestData* HttpClient::CreateRequestData(void * request_context)
         req->Headers.Add("User-Agent", cfg->user_agent_);
     // add user header
     MessageHeaders* user_headers = res->GetUserHeaders();
-    for(unsigned i = 0; i < user_headers->Size(); i++)
+    for(unsigned i = 0; user_headers && i < user_headers->Size(); i++)
         req->Headers.Set((*user_headers)[i].Name, (*user_headers)[i].Value);
     req->Close();
     LOG_INFO("%s, FETCH request\n", req->Uri.c_str());
@@ -375,7 +388,7 @@ struct RequestData* HttpClient::CreateRequestData(void * request_context)
 
 void HttpClient::FreeRequestData(struct RequestData * request_data)
 {
-    delete request_data;
+    delete (HttpFetcherRequest*)request_data;
 }
 
 void HttpClient::ProcessResult(RawFetcherResult& fetch_result)

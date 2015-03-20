@@ -8,6 +8,7 @@ ChannelManager::ChannelManager()
 {
     host_cache_cnt_ = 0;
     serv_cache_cnt_ = 0;
+    min_ready_time_ = 0;
 }
 
 void ChannelManager::__update_serv_host_state(HostChannel* host_channel)

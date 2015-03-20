@@ -27,14 +27,13 @@
 
 #define IOBUFSIZE			(64 * 1024)
 #define SECS_PER_MINUTE		60
-#define MAX_CONNECT_NUM  700000
 
 #if ENABLE_SSL
 # define SCHEME_USE_SSL(scheme)		((scheme) & 1)
 # define SSL_ERROR_TO_ERRNO(error)	(256 + (error))
 #endif
 
-#define DEFAULT_QUEUE_MAX 1000000
+#define DEFAULT_QUEUE_MAX 500000
 
 const struct timeval TIMEOUT_MS = {0, 1000};
 #define SCHEME_USE_SSL(scheme)      ((scheme) & 1)
@@ -944,7 +943,7 @@ void Fetcher::Poll (const Params &params, const struct timeval *timeout) {
 ThreadingFetcher::ThreadingFetcher(IMessageEvents *message_events):
 	request_queue_max_(DEFAULT_QUEUE_MAX),
 	result_queue_max_(DEFAULT_QUEUE_MAX),
-	stop_(true)
+	stop_(true), param_changed_(false)
 {
     fetcher_.reset(new Fetcher(message_events, this));
     pthread_mutex_init(&param_mutex_, NULL);
@@ -993,6 +992,7 @@ void ThreadingFetcher::End() {
 void ThreadingFetcher::UpdateParams(const Fetcher::Params& params) {
     pthread_mutex_lock(&param_mutex_);
     memcpy(&params_, &params, sizeof(Fetcher::Params));
+    param_changed_ = true;
     pthread_mutex_unlock(&param_mutex_);
 }
 
@@ -1009,25 +1009,35 @@ unsigned ThreadingFetcher::AvailableQuota()
 }
 
 void ThreadingFetcher::Run() {
+	Fetcher::Params params;
     while(!stop_) 
     {
-	    Fetcher::Params params;
-	    pthread_mutex_lock(&param_mutex_);
-	    memcpy(&params, &params_, sizeof(Fetcher::Params));
-	    pthread_mutex_unlock(&param_mutex_);
-        //get request
-        pthread_mutex_lock(&request_queue_mutex_);
-        while (request_queue_.size() > 0) 
+        if(param_changed_)
         {
-            size_t connecting = 0, established = 0, closed = 0;
-            fetcher_->GetConnCount(&connecting, &established, &closed);
-            if(connecting + established > MAX_CONNECT_NUM)
-                break;
-            RawFetcherRequest request = request_queue_.front();
-            request_queue_.pop();
-            fetcher_->StartRequest(request.conn, request.context);
+            pthread_mutex_lock(&param_mutex_);
+            memcpy(&params, &params_, sizeof(Fetcher::Params));
+            param_changed_ = false;
+            pthread_mutex_unlock(&param_mutex_);
         }
-        pthread_mutex_unlock(&request_queue_mutex_);
+        //get request
+        if(!request_queue_.empty())
+        {
+            pthread_mutex_lock(&request_queue_mutex_);
+            while (!request_queue_.empty()) 
+            {
+                if(params.max_connecting_cnt)
+                {
+                    size_t connecting = 0, established = 0, closed = 0;
+                    fetcher_->GetConnCount(&connecting, &established, &closed);
+                    if(connecting + established > params.max_connecting_cnt)
+                        break;
+                }
+                RawFetcherRequest request = request_queue_.front();
+                request_queue_.pop();
+                fetcher_->StartRequest(request.conn, request.context);
+            }
+            pthread_mutex_unlock(&request_queue_mutex_);
+        }
 	    fetcher_->Poll(params, &TIMEOUT_MS);
     }
 }
