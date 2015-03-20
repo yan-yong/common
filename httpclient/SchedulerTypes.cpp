@@ -185,7 +185,13 @@ void Resource::Initialize(
 
 std::string Resource::GetHostWithPort() const
 {
-    return (ChannelManager::Instance())->ToString(host_);
+    char buf[2048];
+    size_t sz = snprintf(buf, 2048, "%s", host_->host_.c_str());
+    if(!IsHttpDefaultPort(host_->scheme_, host_->port_))
+    {
+        snprintf(buf + sz, 2048 - sz, ":%hu", host_->port_);
+    }
+    return buf;
 }
 
 std::string Resource::GetUrl() const
