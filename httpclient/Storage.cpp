@@ -112,18 +112,8 @@ Storage::~Storage()
     }
 }
 
-BatchConfig* Storage::AcquireBatchCfg(
-        const std::string& batch_id, 
-        time_t timeout_sec,
-        unsigned max_retry_times,
-        unsigned max_redirect_times,
-        unsigned max_body_size,
-        unsigned truncate_size,
-        ResourcePriority res_prior,
-        const char* user_agent,
-        const char* accept_encoding,
-        const char* accept_language,
-        const char* accept )
+BatchConfig* Storage::AcquireBatchCfg(const std::string& batch_id, 
+    const BatchConfig& default_batch)
 {
     if(close_)
         return NULL;
@@ -134,10 +124,7 @@ BatchConfig* Storage::AcquireBatchCfg(
             return batch_it->second;
     }
     WriteGuard guard(batch_map_lock_);
-    BatchConfig* batch_cfg = new BatchConfig(timeout_sec, 
-            max_retry_times, max_redirect_times, max_body_size, 
-            truncate_size, res_prior, user_agent, accept_encoding, 
-            accept_language, accept);
+    BatchConfig* batch_cfg = new BatchConfig(default_batch);
     batch_cfg_map_.insert(BatchCfgMap::value_type(batch_id, batch_cfg));
     return batch_cfg;
 }
@@ -249,7 +236,8 @@ Resource* Storage::CreateResource(
         void*  contex,
         BatchConfig* batch_cfg,  
         ResourcePriority prior,
-        MessageHeaders* user_headers,
+        const MessageHeaders* user_headers,
+        const char* post_content,
         Resource* root_res)
 {
     if(close_)
@@ -267,7 +255,7 @@ Resource* Storage::CreateResource(
         if(uri.HasQuery())
             suffix += "?" + uri.Query();
         res->Initialize(host_channel, suffix, prior, contex, 
-                user_headers, root_res, batch_cfg);
+            user_headers, post_content, root_res, batch_cfg);
         return res;
     }
     return NULL; 

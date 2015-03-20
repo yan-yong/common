@@ -1,8 +1,9 @@
 #include "HttpClient.hpp"
 
-void HandleResult(boost::shared_ptr<HttpClient::FetchResult>)
+void HandleResult(boost::shared_ptr<HttpClient::FetchResult> result)
 {
-
+    HttpFetcherResponse* resp = result->resp_;
+    printf("%s\n", &(resp->Body[0]));
 }
 
 int main()

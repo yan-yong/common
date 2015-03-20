@@ -46,13 +46,20 @@ void HttpClient::Open()
     fetcher_->Begin(fetcher_params_);
 }
 
-void HttpClient::SetServConfig(ServChannel::ConcurencyMode mode, 
-    double max_err_rate, unsigned err_delay_sec, unsigned serv_max_err)
+void HttpClient::SetDefaultServConfig(
+    ServChannel::ConcurencyMode mode, 
+    double max_err_rate, unsigned err_delay_sec, 
+    unsigned serv_max_err)
 {
     serv_concurency_mode_ = mode;
     serv_max_err_rate_    = max_err_rate;
     serv_err_delay_sec_   = err_delay_sec;
     serv_max_err_count_   = serv_max_err;
+}
+
+void HttpClient::SetDefaultBatchConfig(const BatchConfig& batch_cfg)
+{
+    memcpy(&default_batch_cfg_, &batch_cfg, sizeof(BatchConfig));
 }
 
 void HttpClient::SetFetcherParams(Fetcher::Params params)
@@ -84,7 +91,7 @@ void HttpClient::UpdateBatchConfig(std::string& batch_id,
 }
 
 void HttpClient::PutResult(FetchErrorType error, 
-    IFetchMessage *message, void* contex)
+    HttpFetcherResponse *message, void* contex)
 {
     boost::shared_ptr<FetchResult> result(
         new FetchResult(error, message, contex));
@@ -94,7 +101,7 @@ void HttpClient::PutResult(FetchErrorType error,
         result_queue_.enqueue(result); 
 }
 
-void HttpClient::ProcessSuccResult(Resource* res, IFetchMessage *message)
+void HttpClient::ProcessSuccResult(Resource* res, HttpFetcherResponse* message)
 {
     __sync_fetch_and_sub(&cur_req_size_, 1);
     FetchErrorType fetch_ok(FETCH_FAIL_GROUP_OK, RS_OK);
@@ -106,7 +113,7 @@ void HttpClient::ProcessSuccResult(Resource* res, IFetchMessage *message)
 }
 
 void HttpClient::ProcessFailResult(FetchErrorType fetch_error, 
-    Resource* res, IFetchMessage *message)
+    Resource* res, HttpFetcherResponse* message)
 {
     __sync_fetch_and_sub(&cur_req_size_, 1);
     LOG_ERROR("%s, ERROR, %s\n", res->GetUrl().c_str(), 
@@ -209,7 +216,7 @@ void HttpClient::HandleHttpResponse2xx(Resource* res, HttpFetcherResponse *resp)
         return;
     }
     // Meta redirect check
-    if(TRedirectChecker::instance()->checkMetaRedirect(
+    if(TRedirectChecker::Instance()->checkMetaRedirect(
         res->GetUrl(), *resp, ri.to_url))
     {
         ri.type = REDIRECT_TYPE_META_REFRESH;
@@ -244,7 +251,8 @@ void HttpClient::HandleRedirectResult( Resource* res, HttpFetcherResponse *resp,
     Resource* root_res = res->RootResource(); 
     Resource* sub_res  = Storage::Instance()->CreateResource(
         ri.to_url, root_res->contex_, root_res->cfg_, 
-        root_res->prior_, root_res->GetUserHeaders(), 
+        root_res->prior_, root_res->GetUserHeaders(),
+        root_res->GetPostContent(), 
         root_res->RootResource());
     __handle_request(sub_res);
 }
@@ -289,6 +297,7 @@ bool HttpClient::PutRequest(
     const  std::string& url,
     void*  contex,
     MessageHeaders* user_headers,
+    char* content,
     ResourcePriority prior,
     std::string batch_id )
 {
@@ -298,9 +307,9 @@ bool HttpClient::PutRequest(
             url.c_str(), max_req_size_);
         return false;
     }
-    BatchConfig * batch_cfg = Storage::Instance()->AcquireBatchCfg(batch_id);
+    BatchConfig * batch_cfg = Storage::Instance()->AcquireBatchCfg(batch_id, default_batch_cfg_);
     Resource* res = Storage::Instance()->CreateResource(url, contex, 
-        batch_cfg, prior, user_headers, NULL);
+        batch_cfg, prior, user_headers, NULL, NULL);
     if(!res)
     {
         LOG_ERROR("%s, invalid uri\n", url.c_str());
@@ -369,16 +378,24 @@ struct RequestData* HttpClient::CreateRequestData(void * request_context)
     BatchConfig* cfg = res->cfg_;
     HttpFetcherRequest* req = new HttpFetcherRequest();
     req->Clear();
-    req->Uri = res->GetUrl();
-
+    req->Uri    = res->GetUrl();
+    req->Method = res->GetHttpMethod();
+    req->Version= res->GetHttpVersion();
     req->Headers.Add("Host", res->GetHostWithPort());
     req->Headers.Add("Accept", cfg->accept_);
     req->Headers.Add("Accept-Language", cfg->accept_language_);
     req->Headers.Add("Accept-Encoding", cfg->accept_encoding_);
     if(strlen(res->cfg_->user_agent_))
         req->Headers.Add("User-Agent", cfg->user_agent_);
+    if(res->GetPostContent())
+    {
+        char content_len[16];
+        snprintf(content_len, 16, "%zd", strlen(res->GetPostContent()));
+        req->Headers.Add("Content-Type", "application/x-www-form-urlencoded");
+        req->Headers.Add("Content-Length", content_len);
+    }
     // add user header
-    MessageHeaders* user_headers = res->GetUserHeaders();
+    const MessageHeaders* user_headers = res->GetUserHeaders();
     for(unsigned i = 0; user_headers && i < user_headers->Size(); i++)
         req->Headers.Set((*user_headers)[i].Name, (*user_headers)[i].Value);
     req->Close();
@@ -388,6 +405,7 @@ struct RequestData* HttpClient::CreateRequestData(void * request_context)
 
 void HttpClient::FreeRequestData(struct RequestData * request_data)
 {
+    ((HttpFetcherRequest*)request_data)->Dump();
     delete (HttpFetcherRequest*)request_data;
 }
 

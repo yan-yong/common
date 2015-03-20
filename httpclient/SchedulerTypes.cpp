@@ -12,6 +12,7 @@ const char* BatchConfig::DEFAULT_BATCH_ID   = "default";
 const char* BatchConfig::DEFAULT_ACCEPT_LANGUAGE = "zh-cn"; 
 const char* BatchConfig::DEFAULT_ACCEPT_ENCODING = "gzip";
 const char* BatchConfig::DEFAULT_ACCEPT = "*/*";
+const char* BatchConfig::DEFAULT_HTTP_VERSION = "HTTP/1.1";
 
 const char* GetFetchErrorGroupName(int gid)
 {
@@ -123,11 +124,13 @@ std::string GetSpiderError(FetchErrorType err)
     return err_msg;
 }
 
-//user_headers在外部开内存, 浅拷贝
+//user_headers/post_content 在外部开内存, 浅拷贝
 void Resource::Initialize(
     HostChannel* host_channel,const std::string& suffix, 
     ResourcePriority prior, void* contex,
-    MessageHeaders * user_headers, Resource* root_res, 
+    const MessageHeaders * user_headers,
+    const char* post_content, 
+    Resource* root_res, 
     BatchConfig *cfg)
 {
     host_ = host_channel;
@@ -148,12 +151,17 @@ void Resource::Initialize(
     root_ref_     = 0;
     has_user_headers_= 0; 
 
-    if(user_headers || root_res)
+    if(user_headers || root_res || post_content)
         memset(pextend, 0, sizeof(ResExtend));
     if(user_headers)
     {
         has_user_headers_ = 1;
         pextend->user_headers_ = user_headers;
+    }
+    if(post_content)
+    {
+        has_post_content_ = 1;
+        pextend->post_content_ = post_content;
     }
     if(root_res)
     {
@@ -167,6 +175,11 @@ void Resource::Initialize(
             pextend->user_headers_ = root_res->GetUserHeaders();
             has_user_headers_ = 1;
         }
+        if(!has_post_content_ && root_res->has_post_content_)
+        {
+            pextend->post_content_ = root_res->GetPostContent(); 
+            has_post_content_ = 1;
+        }
     }
 } 
 
@@ -178,6 +191,16 @@ std::string Resource::GetHostWithPort() const
 std::string Resource::GetUrl() const
 {
     return (ChannelManager::Instance())->ToString(host_) + suffix_;
+}
+    
+std::string Resource::GetHttpMethod() const
+{
+    return has_post_content_ ? "POST":"GET";
+}
+
+std::string Resource::GetHttpVersion() const
+{
+    return cfg_->http_version_;
 }
 
 URI Resource::GetURI() const
@@ -203,14 +226,22 @@ void Resource::Destroy()
     {
         //delete ((ResExtend*)extend_)->user_headers_;
         ((ResExtend*)extend_)->user_headers_ = NULL;
+        ((ResExtend*)extend_)->post_content_ = NULL;
     }
 }
 
-MessageHeaders* Resource::GetUserHeaders() const
+const MessageHeaders* Resource::GetUserHeaders() const
 {
     if(!has_user_headers_)
         return NULL;
     return ((ResExtend*)extend_)->user_headers_;
+}
+
+const char* Resource::GetPostContent() const
+{
+    if(!has_post_content_)
+        return NULL;
+    return ((ResExtend*)extend_)->post_content_;
 }
 
 int Resource::GetScheme() const 

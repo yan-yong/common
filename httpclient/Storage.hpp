@@ -80,18 +80,7 @@ public:
     void CheckCacheLimit();
     HostChannel* AcquireHostChannel(const URI& uri);
 
-    BatchConfig* AcquireBatchCfg(const std::string& batch_id, 
-        time_t timeout_sec          = BatchConfig::DEFAULT_TIMEOUT_SEC,
-        unsigned max_retry_times    = BatchConfig::DEFAULT_MAX_RETRY_TIMES,
-        unsigned max_redirect_times = BatchConfig::DEFAULT_MAX_REDIRECT_TIMES,
-        unsigned max_body_size      = BatchConfig::DEFAULT_MAX_BODY_SIZE,
-        unsigned truncate_size      = BatchConfig::DEFAULT_TRUNCATE_SIZE,
-        ResourcePriority res_prior  = BatchConfig::DEFAULT_RES_PRIOR,
-        const char* user_agent      = BatchConfig::DEFAULT_USER_AGENT,
-        const char* accept_encoding = BatchConfig::DEFAULT_ACCEPT_ENCODING,
-        const char* accept_language = BatchConfig::DEFAULT_ACCEPT_LANGUAGE,
-        const char* accept          = BatchConfig::DEFAULT_ACCEPT
-        );
+    BatchConfig* AcquireBatchCfg(const std::string&, const BatchConfig&);
 
     ServChannel* AcquireServChannel(
         char   scheme,
@@ -105,7 +94,8 @@ public:
             void*  contex,
             BatchConfig* batch_cfg, 
             ResourcePriority prior,
-            MessageHeaders* user_headers,
+            const MessageHeaders* user_headers,
+            const char* post_content,
             Resource* root_res);
     
     void DestroyResource(Resource* res);

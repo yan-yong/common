@@ -142,6 +142,7 @@ struct BatchConfig
     static const char* DEFAULT_ACCEPT_LANGUAGE;
     static const char* DEFAULT_ACCEPT_ENCODING;
     static const char* DEFAULT_ACCEPT;
+    static const char* DEFAULT_HTTP_VERSION;
 
     time_t   timeout_sec_; 
     unsigned max_retry_times_;
@@ -153,33 +154,27 @@ struct BatchConfig
     char accept_encoding_[512];
     char accept_language_[512];
     char accept_[512];
+    char http_version_[10];
 
     BatchConfig()
     {
         memset(this, 0, sizeof(BatchConfig));
+        timeout_sec_     = DEFAULT_TIMEOUT_SEC;
+        max_retry_times_ = DEFAULT_MAX_RETRY_TIMES;
+        max_redirect_times_ = DEFAULT_MAX_REDIRECT_TIMES;
+        max_body_size_ = DEFAULT_MAX_BODY_SIZE;
+        truncate_size_ = DEFAULT_TRUNCATE_SIZE;
+        prior_ = DEFAULT_RES_PRIOR;
+        strncpy(user_agent_, DEFAULT_USER_AGENT, 512);
+        strncpy(accept_encoding_, DEFAULT_ACCEPT_ENCODING, 512); 
+        strncpy(accept_language_, DEFAULT_ACCEPT_LANGUAGE, 512); 
+        strncpy(accept_, DEFAULT_ACCEPT, 512);
+        strncpy(http_version_, DEFAULT_HTTP_VERSION, 10);
     }
-    BatchConfig(
-        time_t timeout_sec,
-        unsigned max_retry_times,
-        unsigned max_redirect_times,
-        unsigned max_body_size,
-        unsigned truncate_size,
-        ResourcePriority prior,
-        const char* user_agent,
-        const char* accept_encoding,
-        const char* accept_language,
-        const char* accept 
-        ):
-        timeout_sec_(timeout_sec),
-        max_retry_times_(max_retry_times),
-        max_redirect_times_(max_redirect_times),
-        max_body_size_(max_body_size),
-        truncate_size_(truncate_size)
+
+    BatchConfig(const BatchConfig& other)
     {
-        strncpy(user_agent_, user_agent, 512);
-        strncpy(accept_encoding_, accept_encoding, 512); 
-        strncpy(accept_language_, accept_language, 512); 
-        strncpy(accept_, accept_language, 512); 
+        memcpy(this, &other, sizeof(other));
     }
 };
 
@@ -191,11 +186,11 @@ private:
 public:
     void Initialize(HostChannel* host_channel,
         const std::string& suffix, ResourcePriority prior, 
-        void* contex, MessageHeaders * user_headers, 
-        Resource* parent_res, BatchConfig *cfg);
+        void* contex, const MessageHeaders * user_headers,
+        const char* post_content, Resource* parent_res, 
+        BatchConfig *cfg);
     std::string GetHostWithPort() const;
     void Destroy();
-    MessageHeaders* GetUserHeaders() const;
     std::string GetUrl() const;
     URI GetURI() const;
     int GetScheme() const;
@@ -206,14 +201,19 @@ public:
     Resource* RootResource();
     std::string RootUrl();
     unsigned RedirectCount() const;
+    const MessageHeaders* GetUserHeaders() const;
+    const char* GetPostContent() const;
+    std::string GetHttpMethod() const;
+    std::string GetHttpVersion() const;
 
 public:
     //是否有自定义头
     char has_user_headers_: 1;
     //是否是重定向Resource
     char is_redirect_:      1;
+    char has_post_content_: 1;
     //引用当前Resource的重定向Resource数目
-    char root_ref_:         6;
+    char root_ref_:         5;
     unsigned           cur_retry_times_;
     ResourcePriority   prior_;
     linked_list_node_t queue_node_;
@@ -232,7 +232,8 @@ typedef linked_list_map<time_t, Resource, &Resource::timed_lst_node_> ResTimedMa
 
 struct ResExtend
 {
-    MessageHeaders* user_headers_;
+    const MessageHeaders* user_headers_;
+    const char*     post_content_;
     Resource*       root_res_;
     unsigned        cur_redirect_times_;
 };

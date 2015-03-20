@@ -24,11 +24,11 @@ public:
     struct FetchResult 
     {
         FetchErrorType  error_;
-        IFetchMessage * resp_;
+        HttpFetcherResponse*  resp_;
         void          * contex_;
 
         FetchResult(FetchErrorType error, 
-            IFetchMessage *resp, void* contex): 
+            HttpFetcherResponse *resp, void* contex): 
             error_(error), resp_(resp),  contex_(contex)
         {}
         ~FetchResult()
@@ -61,7 +61,7 @@ protected:
     static  void* RunThread(void *context);
     void UpdateBatchConfig(std::string&, const BatchConfig&);
     void Pool();
-    void PutResult(FetchErrorType, IFetchMessage*, void*);
+    void PutResult(FetchErrorType, HttpFetcherResponse*, void*);
     void PutDnsResult(DnsResultType dns_result);
 
     virtual struct RequestData* CreateRequestData(void *);
@@ -70,8 +70,8 @@ protected:
     virtual void FreeFetchMessage(IFetchMessage *);
 
     virtual void ProcessResult(RawFetcherResult&);
-    virtual void ProcessSuccResult(Resource*, IFetchMessage*);
-    virtual void ProcessFailResult(FetchErrorType, Resource*, IFetchMessage*);
+    virtual void ProcessSuccResult(Resource*, HttpFetcherResponse*);
+    virtual void ProcessFailResult(FetchErrorType, Resource*, HttpFetcherResponse*);
     virtual void HandleDnsResult(DnsResultType dns_result);
     virtual void HandleRedirectResult(Resource*, HttpFetcherResponse*, RedirectInfo);
     virtual void HandleHttpResponse3xx(Resource*, HttpFetcherResponse *);
@@ -86,14 +86,16 @@ public:
        const std::string& url,
        void*  contex = NULL,
        MessageHeaders* user_headers = NULL,
+       char* content = NULL,
        ResourcePriority prior = BatchConfig::DEFAULT_RES_PRIOR,
        std::string batch_id   = BatchConfig::DEFAULT_BATCH_ID);
     //virtual bool PutRequest(Resource* res);
     virtual void Open();
     virtual void Close();
     void SetResultCallback(ResultCallback call_cb);
-    void SetServConfig(ServChannel::ConcurencyMode, double, 
-        unsigned, unsigned);
+    void SetDefaultServConfig(ServChannel::ConcurencyMode, 
+        double, unsigned, unsigned);
+    void SetDefaultBatchConfig(const BatchConfig& batch_cfg);
     void SetFetcherParams(Fetcher::Params params);
 
 private:
@@ -126,6 +128,9 @@ private:
 
     //fetcher配置
     Fetcher::Params fetcher_params_;
+
+    //默认Batch配置
+    BatchConfig default_batch_cfg_;
 };
 
 #endif

@@ -24,6 +24,7 @@
 #include <boost/shared_ptr.hpp>
 #include "httpparser/HttpMessage.hpp"
 #include "SchedulerTypes.hpp"
+#include "singleton/Singleton.h"
 
 struct RedirectInfo
 {
@@ -33,6 +34,7 @@ struct RedirectInfo
 
 class TRedirectChecker
 {
+    DECLARE_SINGLETON(TRedirectChecker);
     public:
         /// Return true if redirected,
         /// @param to is the result of redirected.
@@ -43,17 +45,11 @@ class TRedirectChecker
 #endif
         bool checkMetaRedirect(const std::string &from, const Response &resp, std::string &result);
 
-        TRedirectChecker();
         ~TRedirectChecker();
-
-        static boost::shared_ptr<TRedirectChecker> &instance();
-        static void instance(boost::shared_ptr<TRedirectChecker> &obj);
 
     private:
         class Impl;
         Impl *impl_;
-
-        static boost::shared_ptr<TRedirectChecker> instance_;
 };
 
 #endif   /* ----- #ifndef _SPIDERSERVICE_TREDIRECTCHECKER_INC  ----- */

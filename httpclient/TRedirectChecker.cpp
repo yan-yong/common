@@ -26,23 +26,6 @@
 #include "httpparser/hlink.h"
 #include "TUtility.hpp"
 
-//static pthread_mutex_t sr_mutex = PTHREAD_MUTEX_INITIALIZER;
-boost::shared_ptr < TRedirectChecker > TRedirectChecker::instance_;
-
-boost::shared_ptr < TRedirectChecker > &TRedirectChecker::instance() 
-{
-    if (!instance_) 
-    {
-        throw std::runtime_error("TRedirectChecker instance not set");
-    }
-    return instance_;
-}
-
-void TRedirectChecker::instance(boost::shared_ptr < TRedirectChecker > &obj) 
-{
-    instance_ = obj;
-}
-
 class TRedirectChecker::Impl 
 {
     public:
@@ -193,6 +176,7 @@ class TRedirectChecker::Impl
 #endif
 };
 
+DEFINE_SINGLETON(TRedirectChecker);
 
 TRedirectChecker::TRedirectChecker() :impl_(new Impl()) 
 {

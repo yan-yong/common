@@ -61,9 +61,8 @@ void HttpFetcherRequest::Dump()
     snprintf(file_name, 100, "%u.dump", idx++);
     FILE* fid = fopen(file_name, "w"); 
     for(int i = 0; i < count; i++) 
-    {
-        fwrite();
-    }
+        fwrite(vector[i].iov_base, vector[i].iov_len, 1, fid);
+    fclose(fid);
 }
 
 int HttpFetcherResponse::OnHeadersComplete()
