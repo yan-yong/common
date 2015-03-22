@@ -103,6 +103,7 @@ void ChannelManager::SetServChannel(HostChannel* host_channel, ServChannel * ser
         SpinGuard host_guard(host_channel->lock_);
         if(last_serv && serv_channel->serv_key_ == last_serv->serv_key_)
             return;
+        host_channel->dns_resolving_ = 0;
         HostChannelList::del(*host_channel);
         CheckAddCache(last_serv);
         host_channel->serv_ = serv_channel;
@@ -111,6 +112,14 @@ void ChannelManager::SetServChannel(HostChannel* host_channel, ServChannel * ser
     {
         SpinGuard serv_guard(__serv_lock(serv_channel));
         SpinGuard host_guard(host_channel->lock_);
+        host_channel->update_time_ = current_time_ms();
+        if(!serv_channel)
+        {
+            host_channel->host_error_ = 1;
+            host_channel->serv_       = NULL;
+            return;
+        }
+        host_channel->host_error_ = 0;
         //更新抓取速度
         if(host_channel->fetch_interval_ms_ && 
                 host_channel->fetch_interval_ms_ < serv_channel->fetch_interval_ms_)
@@ -118,7 +127,6 @@ void ChannelManager::SetServChannel(HostChannel* host_channel, ServChannel * ser
             serv_channel->fetch_interval_ms_ = host_channel->fetch_interval_ms_;
         }
         __update_serv_host_state(host_channel);
-        host_channel->update_time_ = current_time_ms();
         CheckRemoveCache(serv_channel);
     }
     //** 检查serv是否ready
@@ -244,7 +252,7 @@ void ChannelManager::AddResource(Resource* res)
         else
         {
             bool host_wait_empty = __wait_empty(host_channel);
-            res->serv_ = host_channel->serv_;
+            //res->serv_ = host_channel->serv_;
             host_channel->res_wait_queue_.add_back(res->prior_, *res);
             if(host_wait_empty) 
                 __update_serv_host_state(host_channel);
@@ -314,6 +322,19 @@ void ChannelManager::SetFetchIntervalMs(HostChannel* host_channel,
     host_channel->fetch_interval_ms_ = fetch_interval_ms;
     if(fetch_interval_ms && fetch_interval_ms < serv_channel->fetch_interval_ms_)
         serv_channel->fetch_interval_ms_ = fetch_interval_ms;
+}
+
+bool ChannelManager::CheckResolveDns(HostChannel* host_channel, 
+    time_t dns_update_time, time_t dns_error_time)
+{
+    SpinGuard host_guard(host_channel->lock_);
+    time_t cur_time   = current_time_ms();
+    time_t cache_time = host_channel->host_error_ ? dns_error_time:dns_update_time;
+    if(host_channel->dns_resolving_ || cur_time < host_channel->update_time_ + cache_time)
+        return false;
+    host_channel->dns_resolving_ = 1;
+    host_channel->host_error_    = 0;
+    return true;
 }
 
 void ChannelManager::ReleaseConnection(Resource* res)

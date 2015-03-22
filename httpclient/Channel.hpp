@@ -17,10 +17,12 @@ class ServChannel;
 struct HostChannel
 {
     typedef long long   HostKey;
-    static const unsigned DEFAULT_MAX_DNS_ERR_COUNT  = 10;
-    static const unsigned DEFAULT_DNS_ERROR_WAIT_SEC = 10;
+    static const unsigned DEFAULT_DNS_UPDATE_TIME  = 86400;
+    static const unsigned DEFAULT_DNS_ERROR_TIME   = 3600;
 
     unsigned char scheme_;
+    unsigned char dns_resolving_:1;
+    unsigned char host_error_:1;
     uint16_t port_;
     std::string host_;
     HostKey     host_key_;
@@ -32,14 +34,15 @@ struct HostChannel
     ResPriorQueue res_wait_queue_;
     unsigned      fetch_interval_ms_;
     //该Host的引用数目
-    volatile unsigned    ref_cnt_;
+    unsigned    ref_cnt_;
     //dns更新时间
     time_t      update_time_;
     SpinLock    lock_;
 
     HostChannel(): 
-        scheme_(PROTOCOL_HTTP), port_(80), 
-        host_key_(0), serv_(NULL), fetch_interval_ms_(0), 
+        scheme_(PROTOCOL_HTTP), dns_resolving_(0),
+        host_error_(0), port_(80), host_key_(0), 
+        serv_(NULL), fetch_interval_ms_(0), 
         ref_cnt_(0), update_time_(0)
     {}
     HostKey GetHostKey() const

@@ -11,8 +11,8 @@ struct addrinfo* DNSResolver::__copy_addrinfo(struct evutil_addrinfo *addr)
     struct addrinfo* ai = (struct addrinfo*)malloc(sz);
     memset(ai, 0, sz);
 
-    ai->ai_addr = (sockaddr*)ai + 1;
-    memcpy(ai, addr, sz);
+    ai->ai_addr = (sockaddr*)(ai + 1);
+    memcpy(ai->ai_addr, addr->ai_addr, addr_sz);
     ai->ai_flags = addr->ai_flags;
     ai->ai_family= addr->ai_family;
     ai->ai_socktype = addr->ai_socktype;

@@ -24,7 +24,9 @@ HttpClient::HttpClient(
     serv_concurency_mode_(ServChannel::DEFAULT_CONCURENCY_MODE),
     serv_max_err_rate_(ServChannel::DEFAULT_MAX_ERR_RATE),
     serv_err_delay_sec_(ServChannel::DEFAULT_ERR_DELAY_SEC),
-    serv_max_err_count_(ServChannel::DEFAULT_MAX_ERR_NUM) 
+    serv_max_err_count_(ServChannel::DEFAULT_MAX_ERR_NUM),
+    dns_update_time_(HostChannel::DEFAULT_DNS_UPDATE_TIME),
+    dns_error_time_(HostChannel::DEFAULT_DNS_ERROR_TIME) 
 {
     fetcher_.reset(new ThreadingFetcher(this));
     dns_resolver_.reset(new DNSResolver());
@@ -55,6 +57,12 @@ void HttpClient::SetDefaultServConfig(
     serv_max_err_rate_    = max_err_rate;
     serv_err_delay_sec_   = err_delay_sec;
     serv_max_err_count_   = serv_max_err;
+}
+
+void HttpClient::SetDnsCacheTime(time_t dns_update_time, time_t dns_error_time)
+{
+    dns_update_time_ = dns_update_time;
+    dns_error_time_  = dns_update_time;
 }
 
 void HttpClient::SetDefaultBatchConfig(const BatchConfig& batch_cfg)
@@ -146,7 +154,10 @@ void HttpClient::HandleDnsResult(DnsResultType dns_result)
         return;
     if(err_msg.empty())
     {
-        LOG_INFO("%s, DNS resolve success.\n", host_channel->host_.c_str());
+        char ai_str[1024];
+        get_ai_string(ai, ai_str, 1024);
+        LOG_INFO("%s, DNS resolve success: %s.\n", 
+            host_channel->host_.c_str(), ai_str);
         ServChannel* serv_channel  = Storage::Instance()->AcquireServChannel(
             host_channel->scheme_, ai, 
             serv_concurency_mode_, serv_max_err_rate_,
@@ -168,6 +179,7 @@ void HttpClient::HandleDnsResult(DnsResultType dns_result)
         FetchErrorType fetch_err(FETCH_FAIL_GROUP_DNS, RS_DNS_SUBMIT_FAIL);
         ProcessFailResult(fetch_err, res, NULL);
     }
+    channel_manager_->SetServChannel(host_channel, NULL);
 }
 
 void HttpClient::HandleHttpResponse3xx(Resource* res, HttpFetcherResponse *resp)
@@ -274,18 +286,45 @@ void HttpClient::__handle_request(Resource* res)
 {
     LOG_INFO("%s, RECV request.\n", res->GetUrl().c_str()); 
     __sync_fetch_and_add(&cur_req_size_, 1);
+    HostChannel * host_channel = res->host_;
+    if(res->serv_ == NULL)
+    {  
+        if(channel_manager_->CheckResolveDns(host_channel, 
+            dns_update_time_, dns_error_time_))
+        {
+            HostKey* host_key = new HostKey(host_channel->host_key_);
+            DNSResolver::ResolverCallback dns_resolver_cb = 
+                boost::bind(&HttpClient::PutDnsResult, this, _1);
+            dns_resolver_->Resolve(host_channel->host_, host_channel->port_, 
+                    dns_resolver_cb, host_key);
+            LOG_INFO("%s, request DNS\n", host_channel->host_.c_str()); 
+        }
+        else if(host_channel->host_error_)
+        {
+
+        } 
+    }
+
     channel_manager_->AddResource(res);
-    //dns不知, 则先去解dns
-    if(!res->serv_)
+    //不指定serv, 尝试去解dns
+    if(res->serv_ == NULL)
     {
-        HostChannel * host_channel = res->host_;
-        HostKey* host_key = new HostKey(host_channel->host_key_);
-        DNSResolver::ResolverCallback dns_resolver_cb = 
-            boost::bind(&HttpClient::PutDnsResult, this, _1);
-        dns_resolver_->Resolve(host_channel->host_, host_channel->port_, 
-            dns_resolver_cb, host_key);
-        LOG_INFO("%s, request DNS\n", host_channel->host_.c_str()); 
-        return;
+        if(channel_manager_->CheckResolveDns(host_channel, dns_update_time_, dns_error_time_))
+        {
+            HostKey* host_key = new HostKey(host_channel->host_key_);
+            DNSResolver::ResolverCallback dns_resolver_cb = 
+                boost::bind(&HttpClient::PutDnsResult, this, _1);
+            dns_resolver_->Resolve(host_channel->host_, host_channel->port_, 
+                    dns_resolver_cb, host_key);
+            LOG_INFO("%s, request DNS\n", host_channel->host_.c_str()); 
+        }
+        //host dns 错误
+        else if(host_channel->host_error_)
+        {
+            FetchErrorType host_err(FETCH_FAIL_GROUP_DNS, RS_DNS_SUBMIT_FAIL);
+            ProcessFailResult(host_err, res, NULL);
+            return;
+        }
     }
      //加入到超时队列中, 0表示不超时
     time_t timeout_stamp = res->GetTimeoutStamp();
@@ -399,7 +438,9 @@ struct RequestData* HttpClient::CreateRequestData(void * request_context)
     for(unsigned i = 0; user_headers && i < user_headers->Size(); i++)
         req->Headers.Set((*user_headers)[i].Name, (*user_headers)[i].Value);
     req->Close();
-    LOG_INFO("%s, FETCH request\n", req->Uri.c_str());
+    char conn_addr_str[200];
+    fetcher_->ConnectionToString(res->conn_, conn_addr_str, 200);
+    LOG_INFO("%s, FETCH request %s.\n", req->Uri.c_str(), conn_addr_str);
     return req; 
 }
 

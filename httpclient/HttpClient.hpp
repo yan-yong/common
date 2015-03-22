@@ -97,6 +97,7 @@ public:
         double, unsigned, unsigned);
     void SetDefaultBatchConfig(const BatchConfig& batch_cfg);
     void SetFetcherParams(Fetcher::Params params);
+    void SetDnsCacheTime(time_t dns_update_time, time_t dns_error_time);
 
 private:
     boost::shared_ptr<ThreadingFetcher> fetcher_;
@@ -131,6 +132,10 @@ private:
 
     //默认Batch配置
     BatchConfig default_batch_cfg_;
+    
+    //dns配置
+    time_t   dns_update_time_;
+    time_t   dns_error_time_;
 };
 
 #endif

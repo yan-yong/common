@@ -14,9 +14,7 @@
 #include <openssl/ssl.h>
 #include <boost/shared_ptr.hpp> 
 #include <queue> 
-
 #include "list.h"
-#include "pthread.hpp"
 
 /**
  * Data to send to remote server
@@ -44,8 +42,6 @@ struct FetchAddress {
     struct sockaddr* local_addr;
     size_t local_addrlen;
 };
-
-const char* GetAddressString(const struct sockaddr* addr, char* addrstr, size_t addrstr_length);
 
 struct __connection;
 typedef struct __connection Connection;
@@ -221,6 +217,8 @@ class ThreadingFetcher : IFetcherEvents {
     public:
  	ThreadingFetcher(IMessageEvents *message_events);
 	virtual ~ThreadingFetcher();
+
+    /*** static method ***/
 	static Connection * CreateConnection(
 		int scheme,
 		int socket_family,
@@ -229,18 +227,18 @@ class ThreadingFetcher : IFetcherEvents {
 		const FetchAddress& address
 		);
 	static void FreeConnection(Connection *conn);
-	void CloseConnection (Connection *conn);
+	static int GetSockAddr(Connection* conn, struct sockaddr* addr);
+    static void ConnectionToString(Connection * conn, char* str, size_t str_len); 
 
+	void CloseConnection (Connection *conn);
 	int Begin(const Fetcher::Params& params);
 	void End();
 	void UpdateParams(const Fetcher::Params &params);
 	int PutRequest(const RawFetcherRequest& request);
 	int GetResult(struct RawFetcherResult *result, const struct timeval *timeout = NULL);
-
 	void UpdateFetcherParam(const Fetcher::Params &fetch_param);
 	int GetConnCount(size_t *connecting, size_t *established, size_t * closed);
 	int GetTrafficBytes(uint64_t *rx_bytes, uint64_t *tx_bytes); 
-	int GetSockAddr(Connection* conn, struct sockaddr* addr) const;
     unsigned AvailableQuota();
 
     protected:

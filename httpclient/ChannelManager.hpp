@@ -87,6 +87,7 @@ public:
     void RemoveResource(Resource*);
     void ReleaseConnection(Resource* res);
     void SetFetchIntervalMs(HostChannel*, unsigned);
+    bool CheckResolveDns(HostChannel*, time_t, time_t);
     std::string ToString(HostChannel* host_channel) const;
     ResourceList RemoveUnfinishRes(ServChannel* serv_channel);
     ResourceList RemoveUnfinishRes(HostChannel* host_channel);

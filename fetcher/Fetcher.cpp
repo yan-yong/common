@@ -18,6 +18,7 @@
 #include <assert.h>
 #include <arpa/inet.h>
 #include <stdarg.h>
+#include <pthread.h>
 #if ENABLE_SSL
 # include <string.h>
 # include <openssl/ssl.h>
@@ -82,6 +83,30 @@ struct __connection
     SSL *ssl;
 #endif
 };
+
+static void __address_string(const struct sockaddr* addr, 
+    char* addrstr, size_t addrstr_length) 
+{
+    if (!addr) 
+    {
+        strncpy(addrstr, "0.0.0.0", addrstr_length);
+        return;
+    }    
+    const char *ret = NULL;
+    switch (addr->sa_family)
+    {    
+        case AF_INET:
+            ret = inet_ntop(addr->sa_family, &((struct sockaddr_in *)addr)->sin_addr, addrstr, addrstr_length);
+            break;
+        case AF_INET6:
+            ret = inet_ntop(addr->sa_family, &((struct sockaddr_in6 *)addr)->sin6_addr, addrstr, addrstr_length);
+            break;
+        default:
+            break;
+    }    
+    if (!ret)
+        strncpy(addrstr, "0.0.0.0", addrstr_length);
+}
 
 /*
  *  \return : maximum time of timeout milliseconds for epoll wait 
@@ -800,6 +825,23 @@ void Fetcher::FreeConnection (Connection *conn) {
     }
 }
 
+int ThreadingFetcher::GetSockAddr(Connection* conn, struct sockaddr* addr)
+{
+    if (!conn) {
+	return -1;
+    }
+    *addr = *conn->address.remote_addr;
+    return 0;
+}
+
+void ThreadingFetcher::ConnectionToString(Connection * conn, char* str, size_t str_len)
+{
+    __address_string(conn->address.local_addr, str, str_len/2);
+    strcat(str, " ==> ");
+    size_t cur_len = strnlen(str, str_len);
+    __address_string(conn->address.remote_addr, str + cur_len, str_len - cur_len);
+}
+
 void Fetcher::CloseConnection (Connection *conn) {
     assert(list_empty(&conn->list));
     if (conn->state != CS_CLOSED) {
@@ -1048,11 +1090,13 @@ Connection* ThreadingFetcher::CreateConnection(
 		int socket_type,
 		int protocol,
 		const FetchAddress& address
-		){
+		)
+{
     return Fetcher::CreateConnection(scheme, socket_family, socket_type, protocol, address);
 }
 
-void ThreadingFetcher::FreeConnection(Connection *conn) {
+void ThreadingFetcher::FreeConnection(Connection *conn) 
+{
     Fetcher::FreeConnection(conn);
 }
 
@@ -1066,14 +1110,6 @@ int ThreadingFetcher::GetTrafficBytes(uint64_t *rx_bytes, uint64_t *tx_bytes) {
 
 int ThreadingFetcher::GetConnCount(size_t *connecting, size_t *established, size_t * closed) {
     return fetcher_->GetConnCount(connecting, established, closed);
-}
-
-int ThreadingFetcher::GetSockAddr(Connection* conn, struct sockaddr* addr) const {
-    if (!conn) {
-	return -1;
-    }
-    *addr = *conn->address.remote_addr;
-    return 0;
 }
 
 int ThreadingFetcher::PutRequest(const RawFetcherRequest& request) {

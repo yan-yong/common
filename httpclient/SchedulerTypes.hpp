@@ -219,6 +219,7 @@ public:
     linked_list_node_t queue_node_;
     linked_list_node_t timed_lst_node_;
     HostChannel *      host_;
+    //resource所属的serv
     ServChannel *      serv_;
     Connection  *      conn_;
     char*              suffix_;
