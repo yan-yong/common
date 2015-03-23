@@ -146,13 +146,13 @@ bool get_addr_string(const struct sockaddr* addr, char* addrstr, size_t addrstr_
     {
     case AF_INET:                                                     
         ret = inet_ntop(addr->sa_family, &((struct sockaddr_in *)addr)->sin_addr, addrstr, addrstr_length);
-        if(ret)
+        if(!ret)
             return false;
         port = htons(((struct sockaddr_in *)addr)->sin_port);
         break;
     case AF_INET6:
         ret = inet_ntop(addr->sa_family, &((struct sockaddr_in6 *)addr)->sin6_addr, addrstr, addrstr_length);
-        if(ret)
+        if(!ret)
             return false;
         port = htons(((struct sockaddr_in6 *)addr)->sin6_port);
         break;
@@ -192,4 +192,42 @@ struct addrinfo* copy_addrinfo(struct addrinfo* addr)
     cur_ai_copy->ai_addr = (struct sockaddr *)(cur_ai_copy + 1); 
     memcpy(cur_ai_copy, addr, sz);
     return cur_ai_copy;
+}
+
+struct addrinfo* create_addrinfo(in_addr ip_addr, uint16_t port)
+{
+    size_t sz = sizeof(struct addrinfo) + sizeof(struct sockaddr_in);
+    struct addrinfo*  ai = (struct addrinfo*)malloc(sz);
+    memset(ai, 0, sz);
+    ai->ai_family  = AF_INET;
+    ai->ai_addrlen = sizeof(struct sockaddr_in);
+    ai->ai_socktype= SOCK_STREAM; 
+    ai->ai_addr    = (struct sockaddr *)(ai + 1);
+    sockaddr_in * inet_addr =  (struct sockaddr_in*)(ai->ai_addr);
+    memcpy(&inet_addr->sin_addr, &ip_addr, sizeof(ip_addr));
+    inet_addr->sin_port = port;
+    inet_addr->sin_family = AF_INET;
+    return ai;
+} 
+
+struct addrinfo* create_addrinfo(const char* ip_str, uint16_t port)
+{
+    size_t sz = sizeof(struct addrinfo) + sizeof(struct sockaddr_in);
+    struct addrinfo*  ai = (struct addrinfo*)malloc(sz);
+    memset(ai, 0, sz);
+    ai->ai_family  = AF_INET;
+    ai->ai_addrlen = sizeof(struct sockaddr_in);
+    ai->ai_socktype= SOCK_STREAM; 
+    ai->ai_addr    = (struct sockaddr *)(ai + 1);
+    sockaddr_in * inet_addr =  (struct sockaddr_in*)(ai->ai_addr);
+    inet_addr->sin_port = ntohs(port);
+    inet_addr->sin_family = AF_INET;
+    if(inet_pton(AF_INET, ip_str, (void*)&inet_addr->sin_addr) <= 0)
+    {
+        free(ai);
+        return NULL;
+    }
+    char temp[1024];
+    inet_ntop(AF_INET, (void*)&inet_addr->sin_addr, temp, 1024);
+    return ai;
 }
