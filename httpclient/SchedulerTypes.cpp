@@ -6,6 +6,7 @@
 #include "log/log.h"
 #include "Channel.hpp"
 #include "ChannelManager.hpp"
+#include <errno.h>
 
 const char* BatchConfig::DEFAULT_USER_AGENT = "Mozilla/5.0 (Windows NT 6.1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/31.0.1650.63 Safari/537.36 SE 2.X MetaSr 1.0";
 const char* BatchConfig::DEFAULT_BATCH_ID   = "default";
@@ -120,7 +121,10 @@ std::string GetSpiderError(FetchErrorType err)
 {
     std::string err_msg = GetFetchErrorGroupName(err.group());
     err_msg += ": ";
-    err_msg += GetSpiderError(err.error_num());
+    if(err.group() != FETCH_FAIL_GROUP_SERVER)
+        err_msg += GetSpiderError(err.error_num());
+    else
+        err_msg += strerror(err.error_num());
     return err_msg;
 }
 
@@ -149,7 +153,8 @@ void Resource::Initialize(
     serv_ = NULL;
     is_redirect_     = 0;
     root_ref_     = 0;
-    has_user_headers_= 0; 
+    has_user_headers_= 0;
+    has_post_content_ = 0; 
 
     if(user_headers || root_res || post_content)
         memset(pextend, 0, sizeof(ResExtend));

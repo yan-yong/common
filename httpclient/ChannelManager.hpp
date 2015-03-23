@@ -12,13 +12,13 @@ class ChannelManager
 
 private:
     HostCacheList host_cache_lst_;
-    SpinLock      host_cache_lock_; 
+    //SpinLock      host_cache_lock_; 
     unsigned      host_cache_cnt_;
     ServCacheList serv_cache_lst_;
-    SpinLock      serv_cache_lock_; 
+    //SpinLock      serv_cache_lock_; 
     unsigned      serv_cache_cnt_;
     ServWaitMap   serv_ready_lst_map_;
-    SpinLock      serv_ready_lock_;  
+    //SpinLock      serv_ready_lock_;  
     time_t        min_ready_time_;
 
 protected:

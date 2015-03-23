@@ -139,6 +139,7 @@ struct ServChannel
     }
     void AddFail()
     {
+        ++err_count_;
         err_rate_.Add(1.0);
     }
     void AddRespTime(time_t resp_time)

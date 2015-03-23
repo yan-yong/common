@@ -21,26 +21,60 @@
 class HttpClient: protected IMessageEvents
 {
 public:
+    struct FetchRequest
+    {
+        URI uri_;
+        void* contex_;
+        MessageHeaders* user_headers_;
+        char* content_;
+        ResourcePriority prior_;
+        std::string batch_id_;
+        struct addrinfo * ai_;
+
+        FetchRequest()
+        {
+            memset(this, 0, sizeof(FetchRequest));
+        }
+        FetchRequest(
+            const URI& uri,
+            void*  contex,
+            MessageHeaders* user_headers,
+            char* content,
+            ResourcePriority prior,
+            std::string batch_id,
+            struct addrinfo * ai):
+        uri_(uri), contex_(contex),
+        user_headers_(user_headers),
+        content_(content), prior_(prior), 
+        batch_id_(batch_id), ai_(ai)
+        {}
+    };
+
     struct FetchResult 
     {
         FetchErrorType  error_;
         HttpFetcherResponse*  resp_;
-        void          * contex_;
+        void* contex_;
 
         FetchResult(FetchErrorType error, 
             HttpFetcherResponse *resp, void* contex): 
-            error_(error), resp_(resp),  contex_(contex)
+            error_(error), resp_(resp), contex_(contex)
         {}
         ~FetchResult()
         {
             if(resp_)
+            {
                 delete resp_;
+                resp_ = NULL;
+            }
         }
     };
 
     typedef boost::shared_ptr<FetchResult> ResultPtr;
+    typedef FetchRequest* RequestPtr;
     typedef boost::function<void (ResultPtr) > ResultCallback;
-    typedef CQueue<ResultPtr > ResultQueue;
+    typedef CQueue<ResultPtr >   ResultQueue;
+    typedef CQueue<RequestPtr >  RequestQueue;
     typedef DNSResolver::DnsResultType DnsResultType;
     typedef CQueue<DnsResultType > DnsResultQueue;
 
@@ -52,7 +86,6 @@ private:
 private:
     void __fetch_resource(Resource* p_res);
     void __fetch_serv(ServChannel* serv);
-    void __handle_request(Resource*);
     time_t __handle_timeout_list();
     void __update_curent_time();
     REDIRECT_TYPE __get_redirect_type(int status_code);
@@ -63,6 +96,15 @@ protected:
     void Pool();
     void PutResult(FetchErrorType, HttpFetcherResponse*, void*);
     void PutDnsResult(DnsResultType dns_result);
+    void HandleRequest(
+        const  URI&  uri,
+        void*  contex,
+        BatchConfig* batch_cfg,  
+        ResourcePriority prior,
+        const MessageHeaders* user_headers,
+        const char* post_content,
+        Resource* root_res, 
+        ServChannel * serv_channel);
 
     virtual struct RequestData* CreateRequestData(void *);
     virtual void FreeRequestData(struct RequestData *);
@@ -88,7 +130,8 @@ public:
        MessageHeaders* user_headers = NULL,
        char* content = NULL,
        ResourcePriority prior = BatchConfig::DEFAULT_RES_PRIOR,
-       std::string batch_id   = BatchConfig::DEFAULT_BATCH_ID);
+       std::string batch_id   = BatchConfig::DEFAULT_BATCH_ID, 
+       struct addrinfo * ai   = NULL);
     //virtual bool PutRequest(Resource* res);
     virtual void Open();
     virtual void Close();
@@ -108,6 +151,7 @@ private:
     ServWaitMap  wait_lst_map_;
     //超时队列, 精度为秒
     ResTimedMap  timed_lst_map_;
+    RequestQueue request_queue_;
     ResultQueue  result_queue_;
     DnsResultQueue dns_queue_;
     size_t max_req_size_;

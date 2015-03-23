@@ -57,7 +57,7 @@ void Storage::__destroy_resource(Resource* res)
 {
     Resource* root_res = res->RootResource();
     //如果资源被重定向资源所引用，则不能删除
-    if(res->root_ref_ != 0)
+    if(res->root_ref_ == 0)
     {
         channel_manager_->RemoveResource(res);
         res->Destroy();
@@ -91,7 +91,7 @@ Storage::Storage():
 
 Storage::~Storage()
 {
-    WriteGuard serv_guard(serv_map_lock_);
+    //WriteGuard serv_guard(serv_map_lock_);
     for(ServMap::iterator it = serv_map_.begin(); 
             it != serv_map_.end(); )
     {
@@ -102,7 +102,7 @@ Storage::~Storage()
         channel_manager_->DestroyChannel(serv_channel);
     }
 
-    WriteGuard host_guard(host_map_lock_);
+    //WriteGuard host_guard(host_map_lock_);
     for(HostMap::iterator it = host_map_.begin(); 
             it != host_map_.end(); )
     {
@@ -152,13 +152,13 @@ ServChannel* Storage::AcquireServChannel(
 {
     ServKey serv_key = __aigetkey(ai, scheme, local_addr); 
     {
-        ReadGuard guard(serv_map_lock_);
+        //ReadGuard guard(serv_map_lock_);
         ServMap::iterator it = serv_map_.find(serv_key); 
         if(it != serv_map_.end())
             return it->second;
     }
 
-    WriteGuard guard(serv_map_lock_);
+    //WriteGuard guard(serv_map_lock_);
     ServChannel* serv_channel = channel_manager_->CreateServChannel(
         scheme, ai, serv_key, concurency_mode, max_err_rate, 
         max_err_count, err_delay_sec, local_addr);
@@ -168,7 +168,7 @@ ServChannel* Storage::AcquireServChannel(
 
 ServChannel* Storage::GetServChannel(ServKey serv_key) const
 {
-    ReadGuard guard(serv_map_lock_);
+    //ReadGuard guard(serv_map_lock_);
     ServMap::const_iterator it = serv_map_.find(serv_key);
     if(it != serv_map_.end())
         return it->second;
@@ -177,7 +177,7 @@ ServChannel* Storage::GetServChannel(ServKey serv_key) const
 
 HostChannel* Storage::GetHostChannel(HostKey host_key) const
 {
-    ReadGuard guard(host_map_lock_);
+    //ReadGuard guard(host_map_lock_);
     HostMap::const_iterator it = host_map_.find(host_key);
     if(it != host_map_.end())
         return it->second;
@@ -196,13 +196,13 @@ HostChannel* Storage::AcquireHostChannel(const URI& uri)
     HostKey host_key = __hostgetkey(host, scheme_str, port);
 
     {
-        ReadGuard guard(host_map_lock_);
+        //ReadGuard guard(host_map_lock_);
         HostMap::iterator it = host_map_.find(host_key);
         if(it != host_map_.end())
             return it->second;
     }
     unsigned fetch_interval = GetHostSpeed(host);
-    WriteGuard guard(host_map_lock_);
+    //WriteGuard guard(host_map_lock_);
     HostChannel* host_channel = channel_manager_->CreateHostChannel(
             scheme, host, port, host_key, fetch_interval);
     host_map_[host_key] = host_channel;
@@ -232,33 +232,30 @@ void Storage::SetHostSpeed(const std::string& host, unsigned fetch_interval_ms)
 }
 
 Resource* Storage::CreateResource(
-        const   std::string& url,
+        const  URI& uri,
         void*  contex,
         BatchConfig* batch_cfg,  
         ResourcePriority prior,
         const MessageHeaders* user_headers,
         const char* post_content,
-        Resource* root_res)
+        Resource* root_res,
+        ServChannel* serv_channel)
 {
     if(close_)
         return NULL;
-    URI uri;
-    if(UriParse(url.c_str(), url.length(), uri) 
-            && HttpUriNormalize(uri))
-    {
-        size_t res_size = sizeof(Resource);
-        if(root_res)
-            res_size += sizeof(ResExtend);
-        Resource* res = (Resource*)malloc(res_size);
-        HostChannel* host_channel = AcquireHostChannel(uri);
-        std::string suffix = uri.Path();
-        if(uri.HasQuery())
-            suffix += "?" + uri.Query();
-        res->Initialize(host_channel, suffix, prior, contex, 
+    size_t res_size = sizeof(Resource);
+    if(root_res)
+        res_size += sizeof(ResExtend);
+    Resource* res = (Resource*)malloc(res_size);
+    HostChannel* host_channel = AcquireHostChannel(uri);
+    std::string suffix = uri.Path();
+    if(uri.HasQuery())
+        suffix += "?" + uri.Query();
+    res->Initialize(host_channel, suffix, prior, contex, 
             user_headers, post_content, root_res, batch_cfg);
-        return res;
-    }
-    return NULL; 
+    res->serv_ = serv_channel;
+    channel_manager_->AddResource(res);
+    return res;
 }
 
 void Storage::CheckCacheLimit()
@@ -267,7 +264,7 @@ void Storage::CheckCacheLimit()
     unsigned host_cache_cnt = channel_manager_->GetHostCacheSize();
     if(host_cache_cnt > host_cache_max_)
     {
-        WriteGuard guard(host_map_lock_);
+        //WriteGuard guard(host_map_lock_);
         unsigned delete_cnt = EXCEED_DELETE_RATE * host_cache_cnt;
         if(!delete_cnt)
             delete_cnt = 1;
@@ -285,7 +282,7 @@ void Storage::CheckCacheLimit()
     unsigned serv_cache_cnt = channel_manager_->GetServCacheSize();
     if(serv_cache_cnt > serv_cache_max_)
     {
-        WriteGuard guard(serv_map_lock_);
+        //WriteGuard guard(serv_map_lock_);
         unsigned delete_cnt = EXCEED_DELETE_RATE * serv_cache_cnt;
         if(!delete_cnt)
             delete_cnt = 1;

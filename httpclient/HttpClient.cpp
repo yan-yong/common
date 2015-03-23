@@ -17,8 +17,10 @@ static FETCH_FAIL_GROUP __srv_error_group(int error)
 HttpClient::HttpClient(
     size_t max_req_size, size_t max_result_size, 
     const char* eth_name):
+    request_queue_(max_req_size*2), 
+    result_queue_(max_result_size), 
     max_req_size_(max_req_size),
-    max_result_size_(max_result_size), 
+    max_result_size_(max_result_size),
     cur_req_size_(0),
     cur_time_(0), stopped_(false), local_addr_(NULL),
     serv_concurency_mode_(ServChannel::DEFAULT_CONCURENCY_MODE),
@@ -51,12 +53,12 @@ void HttpClient::Open()
 void HttpClient::SetDefaultServConfig(
     ServChannel::ConcurencyMode mode, 
     double max_err_rate, unsigned err_delay_sec, 
-    unsigned serv_max_err)
+    unsigned serv_max_err_count)
 {
     serv_concurency_mode_ = mode;
     serv_max_err_rate_    = max_err_rate;
     serv_err_delay_sec_   = err_delay_sec;
-    serv_max_err_count_   = serv_max_err;
+    serv_max_err_count_   = serv_max_err_count;
 }
 
 void HttpClient::SetDnsCacheTime(time_t dns_update_time, time_t dns_error_time)
@@ -106,7 +108,7 @@ void HttpClient::PutResult(FetchErrorType error,
     if(result_cb_)
         result_cb_(result);
     else
-        result_queue_.enqueue(result); 
+        result_queue_.enqueue(result);
 }
 
 void HttpClient::ProcessSuccResult(Resource* res, HttpFetcherResponse* message)
@@ -251,8 +253,8 @@ void HttpClient::HandleHttpResponse2xx(Resource* res, HttpFetcherResponse *resp)
     ProcessSuccResult(res, resp);
 }
 
-void HttpClient::HandleRedirectResult( Resource* res, HttpFetcherResponse *resp, 
-    RedirectInfo ri)
+void HttpClient::HandleRedirectResult( Resource* res, 
+    HttpFetcherResponse *resp, RedirectInfo ri)
 {
     if(res->ReachMaxRedirectNum())
     {
@@ -260,13 +262,19 @@ void HttpClient::HandleRedirectResult( Resource* res, HttpFetcherResponse *resp,
         ProcessFailResult(error_type, res, NULL);
         return; 
     }
-    Resource* root_res = res->RootResource(); 
-    Resource* sub_res  = Storage::Instance()->CreateResource(
-        ri.to_url, root_res->contex_, root_res->cfg_, 
-        root_res->prior_, root_res->GetUserHeaders(),
-        root_res->GetPostContent(), 
-        root_res->RootResource());
-    __handle_request(sub_res);
+    URI uri;
+    if(!UriParse(ri.to_url.c_str(), ri.to_url.length(), uri) 
+        || !HttpUriNormalize(uri))
+    {
+        LOG_ERROR("%s, invalid uri\n", ri.to_url.c_str());
+        return;
+    }
+    Resource* root_res = res->RootResource();
+    HandleRequest(uri, (RequestPtr)root_res->contex_, 
+        root_res->cfg_, root_res->prior_, 
+        root_res->GetUserHeaders(), 
+        root_res->GetPostContent(),
+        root_res, NULL); 
 }
 
 REDIRECT_TYPE HttpClient::__get_redirect_type(int status_code)
@@ -282,13 +290,23 @@ REDIRECT_TYPE HttpClient::__get_redirect_type(int status_code)
     return type;
 }
 
-void HttpClient::__handle_request(Resource* res)
+void HttpClient::HandleRequest(
+        const  URI&  uri,
+        void*   contex,
+        BatchConfig* batch_cfg,  
+        ResourcePriority prior,
+        const MessageHeaders* user_headers,
+        const char* post_content,
+        Resource* root_res,
+        ServChannel* serv_channel)
 {
-    LOG_INFO("%s, RECV request.\n", res->GetUrl().c_str()); 
+    Resource* res = Storage::Instance()->CreateResource(
+        uri, contex, batch_cfg, prior, user_headers, 
+        post_content, root_res, serv_channel);
     __sync_fetch_and_add(&cur_req_size_, 1);
     HostChannel * host_channel = res->host_;
-    if(res->serv_ == NULL)
-    {  
+    if(serv_channel == NULL)
+    {
         if(channel_manager_->CheckResolveDns(host_channel, 
             dns_update_time_, dns_error_time_))
         {
@@ -301,30 +319,10 @@ void HttpClient::__handle_request(Resource* res)
         }
         else if(host_channel->host_error_)
         {
-
-        } 
-    }
-
-    channel_manager_->AddResource(res);
-    //不指定serv, 尝试去解dns
-    if(res->serv_ == NULL)
-    {
-        if(channel_manager_->CheckResolveDns(host_channel, dns_update_time_, dns_error_time_))
-        {
-            HostKey* host_key = new HostKey(host_channel->host_key_);
-            DNSResolver::ResolverCallback dns_resolver_cb = 
-                boost::bind(&HttpClient::PutDnsResult, this, _1);
-            dns_resolver_->Resolve(host_channel->host_, host_channel->port_, 
-                    dns_resolver_cb, host_key);
-            LOG_INFO("%s, request DNS\n", host_channel->host_.c_str()); 
-        }
-        //host dns 错误
-        else if(host_channel->host_error_)
-        {
             FetchErrorType host_err(FETCH_FAIL_GROUP_DNS, RS_DNS_SUBMIT_FAIL);
             ProcessFailResult(host_err, res, NULL);
             return;
-        }
+        } 
     }
      //加入到超时队列中, 0表示不超时
     time_t timeout_stamp = res->GetTimeoutStamp();
@@ -338,7 +336,8 @@ bool HttpClient::PutRequest(
     MessageHeaders* user_headers,
     char* content,
     ResourcePriority prior,
-    std::string batch_id )
+    std::string batch_id,
+    struct addrinfo * ai)
 {
     if(cur_req_size_ > max_req_size_)
     {
@@ -346,15 +345,16 @@ bool HttpClient::PutRequest(
             url.c_str(), max_req_size_);
         return false;
     }
-    BatchConfig * batch_cfg = Storage::Instance()->AcquireBatchCfg(batch_id, default_batch_cfg_);
-    Resource* res = Storage::Instance()->CreateResource(url, contex, 
-        batch_cfg, prior, user_headers, NULL, NULL);
-    if(!res)
+    URI uri;
+    if(!UriParse(url.c_str(), url.length(), uri) 
+        || !HttpUriNormalize(uri))
     {
         LOG_ERROR("%s, invalid uri\n", url.c_str());
-        return false; 
+        return false;
     }
-    __handle_request(res);
+    request_queue_.enqueue(new FetchRequest(uri, contex, 
+        user_headers, content, prior, batch_id, ai)); 
+    LOG_INFO("%s, RECV request.\n", url.c_str()); 
     return true;
 }
 
@@ -441,12 +441,12 @@ struct RequestData* HttpClient::CreateRequestData(void * request_context)
     char conn_addr_str[200];
     fetcher_->ConnectionToString(res->conn_, conn_addr_str, 200);
     LOG_INFO("%s, FETCH request %s.\n", req->Uri.c_str(), conn_addr_str);
+    //req->Dump();
     return req; 
 }
 
 void HttpClient::FreeRequestData(struct RequestData * request_data)
 {
-    ((HttpFetcherRequest*)request_data)->Dump();
     delete (HttpFetcherRequest*)request_data;
 }
 
@@ -456,7 +456,7 @@ void HttpClient::ProcessResult(RawFetcherResult& fetch_result)
     HttpFetcherResponse *resp = (HttpFetcherResponse *)fetch_result.message;
     assert(res);
     fetcher_->CloseConnection(res->conn_);
-    //channel_manager_->ReleaseConnection(res);
+    channel_manager_->ReleaseConnection(res);
     ServChannel * serv = res->serv_;
     int err_num = fetch_result.err_num;
     time_t resp_time = 0;
@@ -494,7 +494,27 @@ void HttpClient::Pool()
     timeout.tv_sec = 0;
     timeout.tv_usec = 0;
     __update_curent_time();
-    //handle  dns result
+    //handle request
+    RequestPtr request;
+    while(request_queue_.try_dequeue(request))
+    {
+        BatchConfig * batch_cfg = Storage::Instance()->AcquireBatchCfg(
+            request->batch_id_, default_batch_cfg_);
+        ServChannel * serv_channel = NULL;
+        if(request->ai_)
+        {
+            char scheme = str2protocal(request->uri_.Scheme());
+            serv_channel = Storage::Instance()->AcquireServChannel(
+                    scheme, request->ai_, serv_concurency_mode_, 
+                    serv_max_err_rate_,   serv_max_err_count_,   
+                    serv_err_delay_sec_,  local_addr_ );
+        }
+        HandleRequest(request->uri_, request->contex_, batch_cfg, 
+            request->prior_, request->user_headers_, 
+            request->content_, NULL, serv_channel);
+        delete request;
+    }
+    //handle dns result
     DnsResultType dns_result;
     while(dns_queue_.try_dequeue(dns_result))
         HandleDnsResult(dns_result);

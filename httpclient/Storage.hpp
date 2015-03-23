@@ -37,15 +37,16 @@ class Storage
     //批次配置查找表
     BatchCfgMap batch_cfg_map_;
     RwLock   batch_map_lock_;
-    //hostchannel查找表
-    HostMap  host_map_;
-    mutable RwLock   host_map_lock_;
-    //servchannel查找表
-    ServMap  serv_map_;
-    mutable RwLock   serv_map_lock_;
     //抓取速度查找表
     SpeedMap host_speed_map_;
     mutable RwLock   host_speed_lock_;
+
+    //hostchannel查找表
+    HostMap  host_map_;
+    //mutable RwLock   host_map_lock_;
+    //servchannel查找表
+    ServMap  serv_map_;
+    //mutable RwLock   serv_map_lock_;
 
     size_t   host_cache_max_; 
     size_t   serv_cache_max_;
@@ -90,13 +91,14 @@ public:
         unsigned err_delay_sec, struct sockaddr* local_addr);
 
     Resource* CreateResource(
-            const   std::string& url,
-            void*  contex,
+            const URI& uri,
+            void* contex,
             BatchConfig* batch_cfg, 
             ResourcePriority prior,
             const MessageHeaders* user_headers,
             const char* post_content,
-            Resource* root_res);
+            Resource* root_res,
+            ServChannel* serv_channel);
     
     void DestroyResource(Resource* res);
 };
