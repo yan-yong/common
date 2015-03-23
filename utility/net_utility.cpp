@@ -162,6 +162,22 @@ bool get_addr_string(const struct sockaddr* addr, char* addrstr, size_t addrstr_
     return true;
 }
 
+bool get_ai_string(struct addrinfo * ai, char* addrstr, size_t addrstr_length)
+{
+    size_t cur_len = 0;
+    while(ai)
+    {
+        sockaddr * addr = ai->ai_addr;
+        uint16_t port = 0;
+        get_addr_string(addr, addrstr + cur_len, addrstr_length - cur_len, port);
+        cur_len = strnlen(addrstr, addrstr_length);
+        //cur_len += snprintf(addrstr + cur_len, addrstr_length - cur_len,":%hu ", port);
+        cur_len += snprintf(addrstr + cur_len, addrstr_length - cur_len," ");
+        ai = ai->ai_next;
+    }
+    return cur_len != 0;
+} 
+
 struct addrinfo* copy_addrinfo(struct addrinfo* addr)
 {
     if(!addr)
