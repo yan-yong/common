@@ -29,7 +29,9 @@ int main()
     fetch_params.conn_timeout.tv_sec  = 10;
     fetch_params.conn_timeout.tv_usec = 0;
     fetch_params.rx_speed_max = 0;
-    fetch_params.max_connecting_cnt = 100000;
+    fetch_params.max_connecting_cnt = 200000;
+    fetch_params.socket_rcvbuf_size = 8192;
+    fetch_params.socket_sndbuf_size = 8192;
     http_client.SetFetcherParams(fetch_params);
 
     uint16_t general_port [] = {80, 8080, 3128, 8118, 808};

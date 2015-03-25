@@ -244,7 +244,7 @@ Resource* Storage::CreateResource(
     if(close_)
         return NULL;
     size_t res_size = sizeof(Resource);
-    if(root_res)
+    if(root_res || user_headers || post_content)
         res_size += sizeof(ResExtend);
     Resource* res = (Resource*)malloc(res_size);
     HostChannel* host_channel = AcquireHostChannel(uri);
@@ -262,38 +262,34 @@ void Storage::CheckCacheLimit()
 {
     //check host cache limit
     unsigned host_cache_cnt = channel_manager_->GetHostCacheSize();
-    if(host_cache_cnt > host_cache_max_)
+    if(host_cache_max_ && host_cache_cnt > host_cache_max_)
     {
         //WriteGuard guard(host_map_lock_);
         unsigned delete_cnt = EXCEED_DELETE_RATE * host_cache_cnt;
         if(!delete_cnt)
             delete_cnt = 1;
-        HostCacheList cache_lst = channel_manager_->PopHostCache(delete_cnt);
-        HostChannel * cur_host = NULL;
-        while(!cache_lst.empty())
+        std::vector<HostChannel*> host_cache_vec = 
+            channel_manager_->PopHostCache(delete_cnt);
+        for(unsigned i = 0; i < host_cache_vec.size(); i++)
         {
-            cur_host = cache_lst.get_front();
-            cache_lst.pop_front();
-            host_map_.erase(cur_host->GetHostKey());
-            channel_manager_->DestroyChannel(cur_host);
+            host_map_.erase(host_cache_vec[i]->GetHostKey());
+            channel_manager_->DestroyChannel(host_cache_vec[i]);
         }
     }
     //check serv cache limit
     unsigned serv_cache_cnt = channel_manager_->GetServCacheSize();
-    if(serv_cache_cnt > serv_cache_max_)
+    if(serv_cache_max_ && serv_cache_cnt > serv_cache_max_)
     {
         //WriteGuard guard(serv_map_lock_);
         unsigned delete_cnt = EXCEED_DELETE_RATE * serv_cache_cnt;
         if(!delete_cnt)
             delete_cnt = 1;
-        ServCacheList cache_lst = channel_manager_->PopServCache(delete_cnt);
-        ServChannel *cur_serv = NULL;
-        while(!cache_lst.empty())
+        std::vector<ServChannel*> serv_cache_vec = 
+            channel_manager_->PopServCache(delete_cnt);
+        for(unsigned i = 0; i < serv_cache_vec.size(); i++)
         {
-            cur_serv = cache_lst.get_front();
-            cache_lst.pop_front();
-            serv_map_.erase(cur_serv->GetServKey());
-            channel_manager_->DestroyChannel(cur_serv);
+            serv_map_.erase(serv_cache_vec[i]->GetServKey());
+            channel_manager_->DestroyChannel(serv_cache_vec[i]);
         }
     }
 }

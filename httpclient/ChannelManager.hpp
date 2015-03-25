@@ -60,7 +60,7 @@ protected:
     void CheckRemoveCache(HostChannel* host_channel);
     void CheckServReady(ServChannel * serv_channel);
     Resource* PopResource(ServChannel* serv_channel);
-    std::vector<Resource*> PopAvailableResources(ServChannel*, 
+    void PopAvailableResources(ServChannel*, 
         std::vector<Resource*>&, unsigned max_count);
 
 public:
@@ -91,8 +91,8 @@ public:
     std::string ToString(HostChannel* host_channel) const;
     ResourceList RemoveUnfinishRes(ServChannel* serv_channel);
     ResourceList RemoveUnfinishRes(HostChannel* host_channel);
-    HostCacheList PopHostCache(unsigned cnt);
-    ServCacheList PopServCache(unsigned cnt);
+    std::vector<HostChannel*> PopHostCache(unsigned cnt);
+    std::vector<ServChannel*> PopServCache(unsigned cnt);
     std::vector<Resource*> PopAvailableResources(unsigned max_count);
 };
 

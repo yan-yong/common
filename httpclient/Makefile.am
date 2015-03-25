@@ -5,7 +5,7 @@ AM_LDFLAGS=-rdynamic -lpthread -L$(top_srcdir)/_lib -llog -lhttpparser -lz -lcry
 
 LDADD=$(boost_path)/lib/libboost_system.a $(boost_path)/lib/libboost_thread.a $(libev_path)/lib/libevent.a
 
-source_list=HttpClient.cpp SchedulerTypes.cpp TUtility.cpp FetchProtocal.cpp HttpFetchProtocal.cpp TRedirectChecker.cpp ChannelManager.cpp Storage.cpp
+source_list=HttpClient.cpp SchedulerTypes.cpp TRedirectChecker.cpp ChannelManager.cpp Storage.cpp
 
 lib_LTLIBRARIES=libhttp_client.la
 libhttp_client_la_SOURCES=$(source_list)

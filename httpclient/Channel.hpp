@@ -4,9 +4,9 @@
 #include "linklist/linked_list.hpp"
 #include "linklist/linked_list_map.hpp"
 #include "SchedulerTypes.hpp"
-#include "TUtility.hpp"
+#include "httpparser/TUtility.hpp"
 #include "lock/lock.hpp"
-#include "HttpFetchProtocal.hpp"
+#include "httpparser/HttpFetchProtocal.hpp"
 /**
     由于HostChannel与ServChannel相互引用，
     确保加锁顺序：先加ServChannel锁，再加HostChannel锁

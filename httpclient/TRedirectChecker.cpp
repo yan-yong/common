@@ -24,7 +24,7 @@
 #include "httpparser/olduri.h"
 #include "httpparser/HttpMessage.hpp"
 #include "httpparser/hlink.h"
-#include "TUtility.hpp"
+#include "httpparser/TUtility.hpp"
 
 class TRedirectChecker::Impl 
 {

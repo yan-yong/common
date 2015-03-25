@@ -353,8 +353,9 @@ bool HttpClient::PutRequest(
         return false;
     }
     request_queue_.enqueue(new FetchRequest(uri, contex, 
-        user_headers, content, prior, batch_id, ai)); 
-    LOG_INFO("%s, RECV request.\n", url.c_str()); 
+        user_headers, content, prior, batch_id, ai));
+    //fprintf(stderr, "1"); 
+    //LOG_INFO("%s, RECV request.\n", url.c_str()); 
     return true;
 }
 
@@ -494,10 +495,16 @@ void HttpClient::Pool()
     timeout.tv_sec = 0;
     timeout.tv_usec = 0;
     __update_curent_time();
+    //handle fetch result
+    RawFetcherResult fetch_result;
+    while (fetcher_->GetResult(&fetch_result, &timeout) == 0) 
+        ProcessResult(fetch_result);
     //handle request
+    size_t cnt = 0;
     RequestPtr request;
     while(request_queue_.try_dequeue(request))
     {
+        ++cnt;
         BatchConfig * batch_cfg = Storage::Instance()->AcquireBatchCfg(
             request->batch_id_, default_batch_cfg_);
         ServChannel * serv_channel = NULL;
@@ -514,14 +521,12 @@ void HttpClient::Pool()
             request->content_, NULL, serv_channel);
         delete request;
     }
+    if(cnt)
+        LOG_INFO("request size: %zd\n", cnt); 
     //handle dns result
     DnsResultType dns_result;
     while(dns_queue_.try_dequeue(dns_result))
         HandleDnsResult(dns_result);
-    //handle fetch result
-    RawFetcherResult fetch_result;
-    while (fetcher_->GetResult(&fetch_result, &timeout) == 0) 
-        ProcessResult(fetch_result);
     unsigned quota = fetcher_->AvailableQuota();
     std::vector<Resource*> res_vec = channel_manager_->PopAvailableResources(quota);
     for(unsigned i = 0; i < res_vec.size(); i++)

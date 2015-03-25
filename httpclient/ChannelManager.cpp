@@ -292,29 +292,30 @@ void ChannelManager::RemoveResource(Resource* res)
     CheckServReady(serv_channel);
 }
 
-HostCacheList ChannelManager::PopHostCache(unsigned cnt)
+std::vector<HostChannel*> ChannelManager::PopHostCache(unsigned cnt)
 {
-    HostCacheList cache_sub_lst;
+    std::vector<HostChannel*> sub_vec;
     //SpinGuard guard(host_cache_lock_);
     for(unsigned i = 0; i < cnt && !host_cache_lst_.empty(); i++)
-    { 
-        cache_sub_lst.add_back(*host_cache_lst_.get_front());
+    {
+        HostChannel * host_channel = host_cache_lst_.get_front(); 
         host_cache_lst_.pop_front();
+        sub_vec.push_back(host_channel);
     }
-    return cache_sub_lst;
+    return sub_vec;
 }
 
-ServCacheList ChannelManager::PopServCache(unsigned cnt)
+std::vector<ServChannel*> ChannelManager::PopServCache(unsigned cnt)
 {
-    ServCacheList cache_sub_lst;
+    std::vector<ServChannel*> sub_vec;
     //SpinGuard guard(serv_cache_lock_);
     for(unsigned i = 0; i < cnt && !serv_cache_lst_.empty(); i++)
     { 
         ServChannel * serv_channel = serv_cache_lst_.get_front();
         serv_cache_lst_.pop_front();
-        cache_sub_lst.add_back(*serv_channel);
+        sub_vec.push_back(serv_channel);
     }
-    return cache_sub_lst;
+    return sub_vec;
 }
 
 void ChannelManager::SetFetchIntervalMs(HostChannel* host_channel, 
@@ -377,7 +378,7 @@ Resource* ChannelManager::PopResource(ServChannel* serv_channel)
     return res;
 }
 
-std::vector<Resource*> ChannelManager::PopAvailableResources(
+void ChannelManager::PopAvailableResources(
     ServChannel* serv_channel, std::vector<Resource*>& res_vec, 
     unsigned max_count)
 {
@@ -403,7 +404,6 @@ std::vector<Resource*> ChannelManager::PopAvailableResources(
         serv_channel->fetching_lst_.add_back(*res);
         res_vec.push_back(res); 
     }
-    return res_vec;
 }
 
 std::vector<Resource*> ChannelManager::PopAvailableResources(unsigned max_count)

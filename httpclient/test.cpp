@@ -1,7 +1,11 @@
 #include <stdio.h>
-#include "SchedulerTypes.hpp"
+#include <unistd.h>
 
 int main()
 {
-    FETCH_FAIL_GROUP error;
+    while(true)
+    {
+        fprintf(stderr, "1");
+        sleep(1);
+    }
 }
