@@ -19,6 +19,7 @@ uint16_t GetHttpDefaultPort(int protocol)
         default:
             assert(false);
     }
+    return 0;
 }
 
 bool IsHttpDefaultPort(int protocol, uint16_t port)

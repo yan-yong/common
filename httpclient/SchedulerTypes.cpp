@@ -36,6 +36,7 @@ const char* GetFetchErrorGroupName(int gid)
 	default:
 		assert(!"No default");
 	}
+    return "";
 }
 
 const char* GetSpiderError(FETCH_ERROR code) 

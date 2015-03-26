@@ -40,14 +40,18 @@ int HttpServer::initialize(const std::string& ip, const std::string& port)
 
 int HttpServer::run()
 {
-    assert(m_server_fun);    
-    try{
-        m_io_service.run();
-    }
-    catch(std::exception& e)
-    {
-        LOG_ERROR("[HttpServer] run exception occur: %s\n", e.what());
-        return -1;
+    assert(m_server_fun);
+    while(true)
+    { 
+        try
+        {
+            m_io_service.run();
+            break;
+        }
+        catch(std::exception& e)
+        {
+            LOG_ERROR("[HttpServer] run exception occur: %s\n", e.what());
+        }
     }
     return 0;
 }
