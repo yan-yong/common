@@ -43,6 +43,7 @@ class DenseBitmap: public Bitmap{
     pthread_mutex_t m_block_locks[MUTEX_NUM];
     volatile size_t m_element_cnt;
     bool   m_auto_save;
+    bool   m_init;
 
     std::string __file_header()
     {
@@ -83,11 +84,20 @@ class DenseBitmap: public Bitmap{
     }
     bool __read_mem(off_t byte_offset, size_t length)
     {
-        ssize_t ret = pread(m_fid, (char*)m_mem + byte_offset, length, m_header.size() + byte_offset);
-        if(ret != (ssize_t)length){
-            LOG_ERROR("[Bitmap] read %s error: %s\n", m_save_file.c_str(), strerror(errno));
-            return false;
+        size_t cur_count = 0;
+        while(cur_count < length)
+        {
+            ssize_t ret = pread(m_fid, (char*)m_mem + byte_offset + cur_count, 
+                length - cur_count, m_header.size() + byte_offset + cur_count);
+            if(ret < 0)
+            {
+                LOG_ERROR("[Bitmap] read %s error: %s\n", 
+                    m_save_file.c_str(), strerror(errno));
+                return false;
+            }
+            cur_count += ret;
         }
+        
         return true; 
     }
     bool __write_header()
@@ -103,10 +113,18 @@ class DenseBitmap: public Bitmap{
     bool __write_mem(off_t byte_offset, size_t length)
     {
         assert(m_fid > 0 && byte_offset < (ssize_t)m_bitmap_size && byte_offset >= 0);
-        ssize_t ret = pwrite(m_fid, (char*)m_mem + byte_offset, length, m_header.size() + byte_offset);
-        if(ret != (ssize_t)length){
-            LOG_ERROR("[Bitmap] write %s error: %s\n", m_save_file.c_str(), strerror(errno));
-            return false;
+        size_t cur_count = 0;
+        while(cur_count < length)
+        {
+            ssize_t ret = pwrite(m_fid, (char*)m_mem + byte_offset + cur_count, 
+                length - cur_count, m_header.size() + byte_offset + cur_count);
+            if(ret < 0)
+            {
+                LOG_ERROR("[Bitmap] write %s error: %s\n", 
+                    m_save_file.c_str(), strerror(errno));
+                return false;
+            }
+            cur_count += ret;
         }
         return true;
     }
@@ -184,7 +202,7 @@ public:
     static void* save_routine(void* arg)
     {
         DenseBitmap * obj = (DenseBitmap*) arg;
-        if(obj->m_save_file.empty())
+        if(obj->m_save_file.empty() || !obj->m_init)
             return NULL;
         LOG_INFO("[Bitmap] %s check save ...\n", obj->m_save_file.c_str());
         if(!__sync_bool_compare_and_swap(&obj->m_saving, false, true)) {
@@ -212,7 +230,8 @@ public:
     DenseBitmap(): m_order(0), m_fid(-1), m_mem(NULL), m_block_state(NULL), 
         m_bitmap_size(0), m_block_size(0), m_exit(false), 
         m_save_thread_id(0), m_saving(false), 
-        m_write_failed(false), m_element_cnt(0), m_auto_save(false)
+        m_write_failed(false), m_element_cnt(0), 
+        m_auto_save(false), m_init(false)
     {
         m_header = __file_header();
         m_min_save_interval = DEFAULT_MIN_SAVE_TIME;

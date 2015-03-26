@@ -23,7 +23,7 @@ void CThread::open(){
 
 void CThread::exit()
 {
-    if(!__sync_bool_compare_and_swap(&m_exit, false, true))
+    if(!m_opened || !__sync_bool_compare_and_swap(&m_exit, false, true))
         return;
     before_thread_exit();
     wait();

@@ -31,3 +31,6 @@ deps
 core.*
 test_httpclient
 test_httpserver
+test_dense_bitmap
+test_judy_bitmap
+test_thread

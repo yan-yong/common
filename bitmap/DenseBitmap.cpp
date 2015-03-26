@@ -19,6 +19,7 @@ int DenseBitmap::initialize(int order, std::string file_name)
     }
     if(m_save_file.empty()){
         LOG_INFO("[Bitmap] use no save file.\n");
+        m_init = true;
         return 0;
     }
 
@@ -58,6 +59,7 @@ int DenseBitmap::initialize(int order, std::string file_name)
             m_block_state = NULL;
             return -1;
         }
+        m_init = true;
         return 0;
     }
     if(!__read_header() || !__read_mem(0, m_bitmap_size)){
@@ -70,6 +72,7 @@ int DenseBitmap::initialize(int order, std::string file_name)
         return -1;
     }
     LOG_INFO("[Bitmap] load data from %s success.\n", m_save_file.c_str());
+    m_init = true;
     return 0;
 }
 
