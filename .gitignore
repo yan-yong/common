@@ -29,3 +29,5 @@ deps
 *.swk
 *.bak
 core.*
+test_httpclient
+test_httpserver
