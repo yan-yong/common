@@ -174,7 +174,7 @@ class DenseBitmap: public Bitmap{
             memset(cur_block_mem, 0, byte_num);
             block_bit_size -= byte_num*8;
             pthread_mutex_unlock(&m_block_locks[cur_lock_id]);
-            LOG_DEBUG("Write offset:%zd %zd bytes.\n", write_mem_beg, write_byte_num);
+            //LOG_DEBUG("Write offset:%zd %zd bytes.\n", write_mem_beg, write_byte_num);
             return __write_mem(write_mem_beg, write_byte_num);
         }
         //record bit which is seted in the current byte
@@ -191,7 +191,7 @@ class DenseBitmap: public Bitmap{
         //perform io write
         for(int i = 0; i < record_cnt; i++) {
             write_mem_beg = bit_record[i]*512;
-            LOG_DEBUG("Write offset:%zd 512 bytes.\n", write_mem_beg);
+            //LOG_DEBUG("Write offset:%zd 512 bytes.\n", write_mem_beg);
             if(!__write_mem(write_mem_beg, write_byte_num))
                 return false;
         }
@@ -212,8 +212,8 @@ public:
         size_t block_bit_size   = obj->m_block_size * 8;
         size_t block_bit_offset = 0;
         while(true){
-            block_bit_offset = find_next_bit(obj->m_block_state, block_bit_size, block_bit_offset);
-            if(block_bit_offset == block_bit_size)
+            block_bit_offset = find_next_bit(obj->m_block_state, obj->m_block_size * 8, block_bit_offset);
+            if(block_bit_offset >= obj->m_block_size * 8)
                 break;
             if(!obj->__write_block(block_bit_offset, block_bit_size)) {
                 LOG_ERROR("[Bitmap] write file %s failed.", obj->m_save_file.c_str());
@@ -268,13 +268,15 @@ public:
     }
     void exit()
     {
-        if(!__sync_bool_compare_and_swap(&m_exit, false, true)){
+        if(!__sync_bool_compare_and_swap(&m_exit, false, true))
+        {
             LOG_ERROR("Dumplicate exit operation.\n");
             return;
         }
+        if(!m_saving)
+            save_routine(this);
         if(m_save_thread_id != 0)
             pthread_join(m_save_thread_id, NULL);
-        save_routine(this);
     }
     virtual int get(size_t offset)
     {
