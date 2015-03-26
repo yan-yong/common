@@ -12,7 +12,8 @@
 #include <sys/epoll.h>
 #include <netdb.h> 
 #include <openssl/ssl.h>
-#include <boost/shared_ptr.hpp> 
+#include <boost/shared_ptr.hpp>
+#include <boost/function.hpp> 
 #include <queue> 
 #include "list.h"
 
@@ -105,6 +106,8 @@ class Fetcher {
 	    unsigned int rx_speed_max;      // 最大入流量，bytes/seconds
 					    // 超过此流量时read会阻塞，强行降低入流量
         unsigned int max_connecting_cnt;// 最大并发连接数目
+        unsigned int socket_rcvbuf_size;// socket接受缓冲区大小
+        unsigned int socket_sndbuf_size;// socket发送缓冲区大小
 	};
 
     public:
@@ -162,7 +165,7 @@ class Fetcher {
 	/**
 	 * 进行实际的网络IO驱动，阻塞最多timeout时长（如果timeout != 0)
 	 */
-	void Poll(const Fetcher::Params &params, const struct timeval *timeout);
+	void Poll(const Fetcher::Params *params, const struct timeval *timeout);
 	int GetTrafficBytes(uint64_t *rx_bytes, uint64_t *tx_bytes); 
 	int GetConnCount(size_t *connecting, size_t *established, size_t * closed);
       
@@ -211,9 +214,14 @@ class Fetcher {
 	uint64_t total_rx_bytes_;
 	uint64_t total_tx_bytes_; 
 	uint64_t last_total_rx_bytes_;
+
+    const Fetcher::Params *params_; 
 };
 
 class ThreadingFetcher : IFetcherEvents {
+    public:
+    typedef boost::function<void (const RawFetcherResult& result)>  ResultCallback;
+
     public:
  	ThreadingFetcher(IMessageEvents *message_events);
 	virtual ~ThreadingFetcher();
@@ -226,12 +234,15 @@ class ThreadingFetcher : IFetcherEvents {
 		int protocol,
 		const FetchAddress& address
 		);
+    static Connection* CreateConnection(Connection*);
 	static void FreeConnection(Connection *conn);
 	static int GetSockAddr(Connection* conn, struct sockaddr* addr);
     static void ConnectionToString(Connection * conn, char* str, size_t str_len); 
 
 	void CloseConnection (Connection *conn);
 	int Begin(const Fetcher::Params& params);
+    void SetMaxQueueSize(size_t request_size, size_t result_size);
+    void SetResultCallback(ResultCallback result_cb);
 	void End();
 	void UpdateParams(const Fetcher::Params &params);
 	int PutRequest(const RawFetcherRequest& request);
@@ -272,6 +283,7 @@ class ThreadingFetcher : IFetcherEvents {
 
 	boost::shared_ptr<Fetcher> fetcher_;
     bool param_changed_;
+    ResultCallback result_cb_;
 };
 
 #endif   /* ----- #ifndef FETCHER_INC  ----- */

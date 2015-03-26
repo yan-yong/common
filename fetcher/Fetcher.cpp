@@ -34,7 +34,7 @@
 # define SSL_ERROR_TO_ERRNO(error)	(256 + (error))
 #endif
 
-#define DEFAULT_QUEUE_MAX 500000
+#define DEFAULT_QUEUE_MAX 100000
 
 const struct timeval TIMEOUT_MS = {0, 1000};
 #define SCHEME_USE_SSL(scheme)      ((scheme) & 1)
@@ -499,8 +499,19 @@ int Fetcher::SendRequest(Connection *conn)
 int Fetcher::ConnectToServer(Connection *conn)
 {
     conn->sockfd = socket(conn->socket_family, conn->socket_type, conn->protocol);
-    if (conn->sockfd < 0) {
-	return -1;
+    if (conn->sockfd < 0) 
+    {
+	    return -1;
+    }
+    if(params_->socket_sndbuf_size && setsockopt(conn->sockfd, 
+        SOL_SOCKET, SO_SNDBUF, &params_->socket_sndbuf_size, sizeof(params_->socket_sndbuf_size)) < 0)
+    {
+        return -1;
+    }
+    if(params_->socket_rcvbuf_size && setsockopt(conn->sockfd, 
+        SOL_SOCKET, SO_RCVBUF, &params_->socket_rcvbuf_size, sizeof(params_->socket_rcvbuf_size)) < 0)
+    {
+        return -1;
     }
 
     if (conn->address.local_addr != NULL) {
@@ -934,13 +945,13 @@ int Fetcher::CheckEvent(struct epoll_event *event, struct list_head *conn_list) 
     return 1;
 }
 
-void Fetcher::Poll (const Params &params, const struct timeval *timeout) {
-
+void Fetcher::Poll (const Params* params, const struct timeval *timeout) {
+    params_ = params;
     //connnection list that we made a connection to.
     LIST_HEAD(tmp_conn_list);
     list_splice_init(&new_conn_list_, tmp_conn_list.prev);
 
-    rx_speed_max_ = params.rx_speed_max;
+    rx_speed_max_ = params_->rx_speed_max;
     int newconns = 0;
 
     AddConnList(&newconns, &tmp_conn_list);
@@ -971,7 +982,7 @@ void Fetcher::Poll (const Params &params, const struct timeval *timeout) {
 	struct list_head *pos, *tmp;
 	list_for_each_safe(pos, tmp, &conn_list_) {
 	    conn = list_entry(pos, Connection, list);
-	    if (cur_time_ >= conn->resp_time + GetConnTimeOut(&params.conn_timeout)) {
+	    if (cur_time_ >= conn->resp_time + GetConnTimeOut(&params_->conn_timeout)) {
 		RemoveErrorConn(conn, ETIMEDOUT);
 	    } else {
 		break;
@@ -1019,6 +1030,17 @@ int ThreadingFetcher::Begin(const Fetcher::Params &params) {
     } else {
 	return 1;
     }
+}
+
+void ThreadingFetcher::SetMaxQueueSize(size_t request_size, size_t result_size)
+{
+    request_queue_max_ = request_size;
+    result_queue_max_  = result_size; 
+}
+
+void ThreadingFetcher::SetResultCallback(ResultCallback result_cb)
+{
+    result_cb_ = result_cb;
 }
 
 void ThreadingFetcher::End() {
@@ -1080,8 +1102,14 @@ void ThreadingFetcher::Run() {
             }
             pthread_mutex_unlock(&request_queue_mutex_);
         }
-	    fetcher_->Poll(params, &TIMEOUT_MS);
+	    fetcher_->Poll(&params, &TIMEOUT_MS);
     }
+}
+
+Connection * ThreadingFetcher::CreateConnection(Connection* conn)
+{
+    return CreateConnection(conn->scheme,conn->socket_family,
+            conn->socket_type, conn->protocol, conn->address);
 }
 
 Connection* ThreadingFetcher::CreateConnection(
@@ -1126,6 +1154,12 @@ int ThreadingFetcher::PutRequest(const RawFetcherRequest& request) {
 }
 
 void ThreadingFetcher::PutResult(const RawFetcherResult& result) {
+    if(result_cb_)
+    {
+        result_cb_(result);
+        return;
+    }
+
     pthread_mutex_lock(&result_queue_mutex_);
     result_queue_.push(result);
     if (result_queue_.size() == 1) {

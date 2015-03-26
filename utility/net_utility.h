@@ -15,5 +15,6 @@ bool get_addr_string(const struct sockaddr* addr, char* addrstr, size_t addrstr_
 bool get_ai_string(struct addrinfo * ai, char* addrstr, size_t addrstr_length);
 struct addrinfo* copy_addrinfo(struct addrinfo* addr);
 struct addrinfo* create_addrinfo(in_addr_t ip_addr, uint16_t port);
-struct addrinfo* create_addrinfo(const char* ip_addr, uint16_t port);
+struct addrinfo* create_addrinfo(const char* ip_str, uint16_t port);
+struct sockaddr* create_sockaddr(const char* ip_addr, uint16_t port);
 #endif

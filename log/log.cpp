@@ -36,6 +36,8 @@ extern "C" void log_printf(unsigned int flags, FILE* stream, const char* format,
     vfprintf(stream, format, va);
     va_end(va);
     funlockfile(stream);
+    fflush(stream);
+
 
     //va_list va; 
     //va_start(va, format);
