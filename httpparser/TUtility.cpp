@@ -223,12 +223,12 @@ bool noneEmptyStr(const char * str)
     return str && (*str != '\0');
 }
 
-void tolower(std::string &str)
-{
-    for(size_t i = 0; i < str.size(); ++i){
-        str[i] = ::tolower(str[i]);
-    }
-}
+//void tolower(std::string &str)
+//{
+//    for(size_t i = 0; i < str.size(); ++i){
+//        str[i] = ::tolower(str[i]);
+//    }
+//}
 
 bool isHtml(const Response& response)
 {

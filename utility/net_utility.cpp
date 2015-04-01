@@ -231,16 +231,3 @@ struct addrinfo* create_addrinfo(const char* ip_str, uint16_t port)
     inet_ntop(AF_INET, (void*)&inet_addr->sin_addr, temp, 1024);
     return ai;
 }
-
-struct sockaddr* create_sockaddr(const char* ip_str, uint16_t port)
-{
-    struct sockaddr_in* inet_addr = (struct sockaddr_in*)malloc(sizeof(struct sockaddr_in));
-    if(inet_pton(AF_INET, ip_str, (void*)&inet_addr->sin_addr) <= 0)
-    {
-        free(inet_addr);
-        return NULL;
-    }
-    inet_addr->sin_port = ntohs(port);
-    inet_addr->sin_family = AF_INET;
-    return (struct sockaddr*)inet_addr;
-}
