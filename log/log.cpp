@@ -2,6 +2,8 @@
 #include <time.h>
 #include <stdarg.h>
 #include <pthread.h>
+#include <sys/types.h>
+#include <unistd.h>
 
 int g_min_log_level = LOG_LEVEL_DEBUG;
 bool g_log_need_lock = false;
@@ -27,7 +29,7 @@ extern "C" void log_printf(unsigned int flags, FILE* stream, const char* format,
     struct tm tm; 
     strftime(buf, sizeof(buf), "[%Y-%m-%d %H:%M:%S]", localtime_r(&t, &tm));
     size_t buf_len = strlen(buf);
-    snprintf(buf + buf_len, 4096 - buf_len, " [%s] [%lx] ", head_msg[level], pthread_self());
+    snprintf(buf + buf_len, 4096 - buf_len, " [%s] [%d] [%lx] ", head_msg[level], getpid(), pthread_self());
 
     flockfile(stream);
     fprintf(stream, buf);
@@ -36,7 +38,7 @@ extern "C" void log_printf(unsigned int flags, FILE* stream, const char* format,
     vfprintf(stream, format, va);
     va_end(va);
     funlockfile(stream);
-    fflush(stream);
+    //fflush(stream);
 
 
     //va_list va; 
