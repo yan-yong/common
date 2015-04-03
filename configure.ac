@@ -80,6 +80,7 @@ AC_CONFIG_FILES([\
 	queue/Makefile
 	thread/Makefile
 	utility/Makefile
+	shm/Makefile
 	fetcher/Makefile
 	httpparser/Makefile
 	dnsresolver/Makefile
