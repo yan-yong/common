@@ -23,10 +23,19 @@ class ShareMem
     int share_mem_id;
     size_t share_mem_size;
     pthread_mutex_t lock;
+    char *sync_file_name;
+
 public:
-    ShareMem(int share_mem_key, size_t size): m_pPool(NULL), cur_ptr(NULL), share_mem_id(0), share_mem_size(size){
+    ShareMem(int share_mem_key, size_t size, const char *sync_file = NULL): 
+        m_pPool(NULL), cur_ptr(NULL), 
+        share_mem_id(0), share_mem_size(size),
+        sync_file_name(NULL)
+    {
+        if(sync_file)
+            sync_file_name = strdup(sync_file);
         bool new_create = false;
-        if((share_mem_id = shmget(share_mem_key, share_mem_size, IPC_CREAT | IPC_EXCL | 0666)) < 0) {
+        if((share_mem_id = shmget(share_mem_key, share_mem_size, IPC_CREAT | IPC_EXCL | 0666)) < 0) 
+        {
             if((share_mem_id = shmget(share_mem_key, share_mem_size, 0666)) < 0){
                 fprintf(stderr,"ShareMem: fail to get shm Key: %d, error_info: %s\n", share_mem_key, strerror(errno));
                 return;
@@ -44,18 +53,33 @@ public:
         }
         cur_ptr = m_pPool;
         if(new_create)
+        {
             memset(m_pPool, 0, sizeof(size));
+            if(sync_file_name)
+            {
+                FILE* fid = fopen(sync_file_name, "r");
+                if(fid)
+                    fread(m_pPool, 1, share_mem_size, fid);
+            }
+        }
         pthread_mutex_init(&lock, NULL); 
     }
     ~ShareMem(){
-        if(m_pPool){
+        if(m_pPool)
+        {
             shmdt(m_pPool);
             m_pPool = NULL; 
+        }
+        if(sync_file_name)
+        {
+            free(sync_file_name);
+            sync_file_name = NULL;
         }
     }
     int read(void* dst_ptr, size_t size){
         pthread_mutex_lock(&lock);
-        if(m_pPool || cur_ptr - m_pPool + size > share_mem_size){
+        if(!m_pPool || cur_ptr - m_pPool + size > share_mem_size)
+        {
             pthread_mutex_unlock(&lock);
             return -1;
         }
@@ -66,7 +90,8 @@ public:
     }
     int pread(void* dst_ptr, size_t size, size_t offset){
         pthread_mutex_lock(&lock);
-        if(m_pPool || offset > share_mem_size || offset + size > share_mem_size){
+        if(!m_pPool || offset > share_mem_size || offset + size > share_mem_size)
+        {
             pthread_mutex_unlock(&lock);
             return -1;
         }
@@ -76,7 +101,8 @@ public:
     }
     int write(void* src_ptr, size_t size){
         pthread_mutex_lock(&lock);
-        if(m_pPool || cur_ptr - m_pPool + size > share_mem_size){ 
+        if(!m_pPool || cur_ptr - m_pPool + size > share_mem_size)
+        { 
             pthread_mutex_unlock(&lock);
             return -1;
         }
@@ -87,7 +113,7 @@ public:
     }
     int pwrite(void* src_ptr, size_t size, size_t offset){
         pthread_mutex_lock(&lock);
-        if(m_pPool || offset > share_mem_size || offset + size > share_mem_size){ 
+        if(!m_pPool || offset > share_mem_size || offset + size > share_mem_size){ 
             pthread_mutex_unlock(&lock);
             return -1;
         }
@@ -96,13 +122,33 @@ public:
         return 0;
     }
 
-    bool mem_ok(){
+    int sync()
+    {
+        if(!m_pPool || !sync_file_name)
+            return -1;
+        pthread_mutex_lock(&lock);
+        FILE* fid = fopen(sync_file_name, "w");
+        if(fid && fwrite((void*)m_pPool, 1, share_mem_size, fid) == share_mem_size)
+        {
+            fclose(fid);
+            pthread_mutex_unlock(&lock);
+            return 0;
+        }
+        if(fid)
+            fclose(fid);
+        pthread_mutex_unlock(&lock);
+        return -1;
+    }
+
+    bool mem_ok()
+    {
         return m_pPool != NULL;
     }
 
     int rewind(){
         pthread_mutex_lock(&lock);
-        if(m_pPool){
+        if(!m_pPool)
+        {
             pthread_mutex_unlock(&lock);
             return -1;
         }
@@ -113,7 +159,8 @@ public:
 
     int lseek(size_t offset){
         pthread_mutex_lock(&lock);
-        if(m_pPool || offset > share_mem_size){
+        if(!m_pPool || offset > share_mem_size)
+        {
             pthread_mutex_unlock(&lock);
             return -1;
         }
@@ -147,9 +194,10 @@ public:
     template<class T>
     T* New(){
         pthread_mutex_lock(&lock);
-        if(!m_pPool || cur_ptr - m_pPool + sizeof(T) > share_mem_size){
-        pthread_mutex_unlock(&lock);
-        return NULL;
+        if(!m_pPool || cur_ptr - m_pPool + sizeof(T) > share_mem_size)
+        {
+            pthread_mutex_unlock(&lock);
+            return NULL;
         }
         T* ret = (T*)cur_ptr;
         cur_ptr += sizeof(T);
