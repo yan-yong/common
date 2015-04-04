@@ -6,9 +6,9 @@ struct Obj
 {
     char buf[10];
 
-    bool operator == (const Obj& other)
+    bool operator < (const Obj& other) const
     {
-        return strncmp(buf, other.buf, 10) == 0;
+        return strncmp(buf, other.buf, 10) < 0;
     }
 
     Obj()
@@ -40,23 +40,37 @@ int main()
     share_set.insert("11111");
     share_set.insert("22222");
     share_set.insert("33333");
+    share_set.insert("33333");
+    share_set.erase("11111");
+    share_set.insert("11111");
+    share_set.insert("33333");
+    share_set.insert("22222");
+    share_set.insert("33333");
+    share_set.erase("33333");
+    share_set.erase("22222");
 
+    /*
     pid_t child_pid = fork();    
     if(child_pid)
     {
         share_set.insert("4444444");
         sleep(10);
     }
-    else
+    */
     {
+        share_set.insert("11111");
+        share_set.insert("33333");
+        share_set.insert("22222");
+
         sleep(1);
         uint64_t idx = 0;
         Obj *obj = new Obj();
-        share_set.get_next(idx, *obj);
-        while(idx < 100000)
+        while(true)
         {
-            printf("%lu %p %s\n", idx, obj, obj->buf);
-            share_set.get_next(idx, *obj);
+            if(share_set.get_next(idx, *obj))
+                printf("%lu %p %s\n", idx, obj, obj->buf);
+            else
+                break;
         }
     }
 

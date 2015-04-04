@@ -29,7 +29,7 @@ private:
             if(!test_bitmap((long)hash_idx, (void*)data_bitmap_))
                 break;
             bool is_delete = test_bitmap((long)hash_idx, (void*)delete_bitmap_);
-            if(!is_delete && elements_[hash_idx] == e)
+            if(!is_delete && !(elements_[hash_idx] < e) && !(e < elements_[hash_idx]))
             {
                 ret = true;
                 break;
@@ -63,17 +63,15 @@ public:
         assert(elements_);
     }
 
-    T* find(const T& e) const
+    bool find(const T& e) const
     {
         bool ret = false;
         HashKey hash_idx = 0;
         __find_set(e, ret, hash_idx);
-        if(!ret)
-            return NULL;
-        return elements_ + hash_idx;
+        return ret;
     }
 
-    T* insert(const T& e) const
+    bool insert(const T& e) const
     {
         bool ret = false;
         HashKey hash_idx = 0;
@@ -83,8 +81,22 @@ public:
             memcpy(elements_ + hash_idx, &e, sizeof(T));
             set_bitmap((long)hash_idx, (void*)data_bitmap_);
             clear_bitmap((long)hash_idx, (void*)delete_bitmap_);
+            return true;
         }
-        return elements_ + hash_idx;
+        return false;
+    }
+
+    void update(const T& e) const
+    {
+        bool ret = false;
+        HashKey hash_idx = 0;
+        __find_set(e, ret, hash_idx);
+        if(!ret)
+        {
+            set_bitmap((long)hash_idx, (void*)data_bitmap_);
+            clear_bitmap((long)hash_idx, (void*)delete_bitmap_);
+        }
+        memcpy(elements_ + hash_idx, &e, sizeof(T));
     }
 
     bool erase(const T& e) const
@@ -94,13 +106,12 @@ public:
         __find_set(e, ret, hash_idx);
         if(!ret)
             return false;
-        clear_bitmap((long)hash_idx, (void*)delete_bitmap_);
+        set_bitmap((long)hash_idx, (void*)delete_bitmap_);
         return true;
     }
 
     bool get_next(HashKey& hash_key, T& e) const
     {
-        bool ret = false;
         while(hash_key < *size_)
         {
             hash_key = find_next_bit(data_bitmap_, *size_, hash_key);
@@ -110,11 +121,11 @@ public:
             {
                 memcpy(&e, elements_ + hash_key, sizeof(T));
                 ++hash_key;
-                ret = true;
-                break;
+                return true;
             }
+            ++hash_key;
         }
-        return ret;
+        return false;
     }
 };
 
