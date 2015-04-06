@@ -15,6 +15,7 @@
 #include <iostream>
 #include <assert.h>
 #include <sys/stat.h>
+#include "log/log.h"
 
 class ShareMem 
 {
@@ -37,17 +38,20 @@ public:
         if((share_mem_id = shmget(share_mem_key, share_mem_size, IPC_CREAT | IPC_EXCL | 0666)) < 0) 
         {
             if((share_mem_id = shmget(share_mem_key, share_mem_size, 0666)) < 0){
-                fprintf(stderr,"ShareMem: fail to get shm Key: %d, error_info: %s\n", share_mem_key, strerror(errno));
+                fprintf(stderr,"[ShareMem] fail to get shm Key: %d, error_info: %s\n", share_mem_key, strerror(errno));
                 return;
             }
-            new_create = true;
-            //else fprintf(stderr,"shm key:%u exist, get success.\n", share_mem_key);
+            LOG_INFO("[ShareMem] shm key:%u exist, get success.\n", share_mem_key);
         }
-        //else fprintf(stderr,"create new shm succ\n");
+        else
+        {
+            new_create = true;
+            LOG_INFO("[ShareMem] create new shm success.\n");
+        }
 
         if ((m_pPool = (char *)shmat(share_mem_id, NULL ,0)) == (char *) -1) 
         {   
-            fprintf(stderr,"ShareMem: Fail to shmat. ShmID is %d\n", share_mem_id);
+            LOG_ERROR("[ShareMem] Fail to shmat. ShmID is %d\n", share_mem_id);
             shmctl(share_mem_id, IPC_RMID, NULL);
             return; 
         }
@@ -58,8 +62,13 @@ public:
             if(sync_file_name)
             {
                 FILE* fid = fopen(sync_file_name, "r");
-                if(fid)
-                    fread(m_pPool, 1, share_mem_size, fid);
+                if(fid && fread(m_pPool, 1, share_mem_size, fid) == share_mem_size)
+                    LOG_INFO("[ShareMem] load sync file %s success.\n", sync_file_name);
+                else
+                {
+                    LOG_ERROR("[ShareMem] load sync file %s error.\n", sync_file_name);
+                    memset(m_pPool, 0, sizeof(size));
+                }
             }
         }
         pthread_mutex_init(&lock, NULL); 
