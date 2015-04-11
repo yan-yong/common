@@ -1,6 +1,6 @@
 #ifndef FAST_CTYPE_HPP_INCLUDED
 #define FAST_CTYPE_HPP_INCLUDED
-
+#include <ctype.h>
 #include <limits.h>
 #include <memory.h>
 #include <algorithm>

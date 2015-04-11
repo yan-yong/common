@@ -592,18 +592,46 @@ int Fetcher::AddConn(int *n, Connection *conn, struct list_head *conn_list)
     }
 }
 
-void Fetcher::AddConnList(int *n, struct list_head *conn_list)
+unsigned Fetcher::AvailableQuota()
 {
+    if(!params_ || !params_->max_connecting_cnt)
+        return UINT_MAX;
+    size_t connecting = 0, established = 0, closed = 0;
+    GetConnCount(&connecting, &established, &closed);
+    return params_->max_connecting_cnt <= connecting + established ? 0 : params_->max_connecting_cnt - connecting - established;
+}
+
+void Fetcher::AddConnList(int *n)
+{
+    unsigned conn_quota = AvailableQuota();
+    if(req_generator_)
+    {
+        if(conn_quota == 0)
+            return;
+        std::vector<RawFetcherRequest> req_vec;
+        req_generator_(conn_quota, req_vec);
+        for(unsigned i = 0; i < req_vec.size(); i++)
+        {
+            assert(req_vec[i].conn);
+            req_vec[i].conn->user_data = req_vec[i].context;
+            INIT_LIST_HEAD(&req_vec[i].conn->list); 
+            if (AddConn(n, req_vec[i].conn, &conn_list_) != 0) 
+                SetConnError(req_vec[i].conn, errno);
+        }
+        return;
+    }
+
+    struct list_head *conn_list = &new_conn_list_;
     struct list_head *pos, *prev;
-    Connection *conn;
     list_for_each_safe(pos, prev, conn_list)
     {
-	conn = list_entry(pos, Connection, list);
-	list_del(pos);
-	INIT_LIST_HEAD(&conn->list);
-	if (AddConn(n, conn, &conn_list_) != 0) {
-	    SetConnError(conn, errno);
-	}
+        if((unsigned)*n > conn_quota)
+            break;
+        Connection *conn = list_entry(pos, Connection, list);
+        list_del(pos);
+        INIT_LIST_HEAD(&conn->list);
+        if (AddConn(n, conn, &conn_list_) != 0) 
+            SetConnError(conn, errno);
     }
 }
 
@@ -870,11 +898,18 @@ void Fetcher::CloseConnection (Connection *conn) {
     }
 }
 
-void Fetcher::StartRequest (Connection *conn, void *context) {
+void Fetcher::StartRequest (Connection *conn, void *context) 
+{
+    assert(!req_generator_);
     assert(conn->state == CS_CLOSED || conn->state == CS_FINISH);
     assert(list_empty(&conn->list));
     conn->user_data = context;
     list_add_tail(&conn->list, &new_conn_list_);
+}
+
+void Fetcher::SetRequestGenerator(RequestGenerator req_generator)
+{
+    req_generator_ = req_generator; 
 }
 
 void Fetcher::SetConnError(Connection *conn, int error)
@@ -893,7 +928,7 @@ void Fetcher::SetConnError(Connection *conn, int error)
 int Fetcher::CheckEvent(struct epoll_event *event, struct list_head *conn_list) {
     Connection *conn = (Connection *)event->data.ptr;
     int old_state = conn->state;
-    int ret;
+    int ret = 0;
     
     switch (conn->state)
     {
@@ -948,19 +983,14 @@ int Fetcher::CheckEvent(struct epoll_event *event, struct list_head *conn_list) 
 void Fetcher::Poll (const Params* params, const struct timeval *timeout) {
     params_ = params;
     //connnection list that we made a connection to.
-    LIST_HEAD(tmp_conn_list);
-    list_splice_init(&new_conn_list_, tmp_conn_list.prev);
-
     rx_speed_max_ = params_->rx_speed_max;
     int newconns = 0;
-
-    AddConnList(&newconns, &tmp_conn_list);
-    int n = 0;
-
-    UpdateTime(time(NULL));
+    AddConnList(&newconns);
     nconns_ += newconns;
 
+    UpdateTime(time(NULL));
     unsigned int epoll_timeout = GetEpollTimeOut(timeout);
+    int n = 0;
     if ((n = __alloc_events_space(&epoll_events_, max_events_, nconns_)) >= 0) {
 	max_events_ = n;
 	n = epoll_wait(epfd_, epoll_events_, nconns_ + 1, epoll_timeout);
@@ -1086,19 +1116,15 @@ void ThreadingFetcher::Run() {
         //get request
         if(!request_queue_.empty())
         {
+            unsigned quota = fetcher_->AvailableQuota();
+            unsigned cnt = 0;
             pthread_mutex_lock(&request_queue_mutex_);
-            while (!request_queue_.empty()) 
+            while (!request_queue_.empty() && cnt < quota) 
             {
-                if(params.max_connecting_cnt)
-                {
-                    size_t connecting = 0, established = 0, closed = 0;
-                    fetcher_->GetConnCount(&connecting, &established, &closed);
-                    if(connecting + established > params.max_connecting_cnt)
-                        break;
-                }
                 RawFetcherRequest request = request_queue_.front();
                 request_queue_.pop();
                 fetcher_->StartRequest(request.conn, request.context);
+                ++cnt;
             }
             pthread_mutex_unlock(&request_queue_mutex_);
         }
@@ -1140,7 +1166,9 @@ int ThreadingFetcher::GetConnCount(size_t *connecting, size_t *established, size
     return fetcher_->GetConnCount(connecting, established, closed);
 }
 
-int ThreadingFetcher::PutRequest(const RawFetcherRequest& request) {
+int ThreadingFetcher::PutRequest(const RawFetcherRequest& request) 
+{
+    assert(!req_generator_);
     assert(request.conn);
     assert(list_empty(&request.conn->list));
     pthread_mutex_lock(&request_queue_mutex_);
@@ -1153,13 +1181,18 @@ int ThreadingFetcher::PutRequest(const RawFetcherRequest& request) {
     return 0;
 }
 
+void ThreadingFetcher::SetRequestGenerator(RequestGenerator req_generator)
+{
+    fetcher_->SetRequestGenerator(req_generator);
+    req_generator_ = req_generator;
+}
+
 void ThreadingFetcher::PutResult(const RawFetcherResult& result) {
     if(result_cb_)
     {
         result_cb_(result);
         return;
     }
-
     pthread_mutex_lock(&result_queue_mutex_);
     result_queue_.push(result);
     if (result_queue_.size() == 1) {
@@ -1170,7 +1203,9 @@ void ThreadingFetcher::PutResult(const RawFetcherResult& result) {
     pthread_mutex_unlock(&result_queue_mutex_);
 }
 
-int ThreadingFetcher::GetResult(struct RawFetcherResult *result, const struct timeval *timeout) {
+int ThreadingFetcher::GetResult(struct RawFetcherResult *result, const struct timeval *timeout) 
+{
+    assert(!result_cb_);
     if(!timeout){
 	pthread_mutex_lock(&result_queue_mutex_);
 

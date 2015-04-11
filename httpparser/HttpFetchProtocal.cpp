@@ -66,6 +66,14 @@ void HttpFetcherRequest::Dump()
     fclose(fid);
 }
 
+size_t HttpFetcherRequest::Size()
+{
+    size_t sz = 0;
+    for(int i = 0; i < count; i++)
+        sz += vector[i].iov_len;
+    return sz;
+}
+
 int HttpFetcherResponse::OnHeadersComplete()
 {
     int n = Headers.Find("Transfer-Encoding");

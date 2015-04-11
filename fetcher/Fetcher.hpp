@@ -96,6 +96,7 @@ struct RawFetcherResult {
 
 class Fetcher {
     public:
+    typedef boost::function<void (int n, std::vector<RawFetcherRequest>&)> RequestGenerator;
 	/**
 	 * Params controlling the behiver of fetch
 	 */
@@ -159,9 +160,11 @@ class Fetcher {
 	/**
 	 * 发起抓取请求，使Connection进入与远程服务器的PingPong循环。
 	 * 但请注意，StartRequest必须在FinishFetch或CreateConnection之后
+     * SetRequestGenerator设置取request时的回调, 注意StartRequest
+     * 和SetRequestGenerator只能二选一
 	 */
 	void StartRequest(Connection *conn, void *context);
-
+    void SetRequestGenerator(RequestGenerator req_generator);
 	/**
 	 * 进行实际的网络IO驱动，阻塞最多timeout时长（如果timeout != 0)
 	 */
@@ -169,9 +172,11 @@ class Fetcher {
 	int GetTrafficBytes(uint64_t *rx_bytes, uint64_t *tx_bytes); 
 	int GetConnCount(size_t *connecting, size_t *established, size_t * closed);
       
+    inline unsigned AvailableQuota();
+
     private:
 	int CheckEvent(struct epoll_event *event, struct list_head *conn_list);
-	void AddConnList(int *n, struct list_head *conn_list);
+	void AddConnList(int *n);
 	int AddConn(int *n, Connection *conn, struct list_head *conn_list);
 	int NewConnection(Connection *conn);
 	int ConnectToServer(Connection *conn);
@@ -215,12 +220,14 @@ class Fetcher {
 	uint64_t total_tx_bytes_; 
 	uint64_t last_total_rx_bytes_;
 
-    const Fetcher::Params *params_; 
+    const Fetcher::Params *params_;
+    RequestGenerator req_generator_;
 };
 
 class ThreadingFetcher : IFetcherEvents {
     public:
     typedef boost::function<void (const RawFetcherResult& result)>  ResultCallback;
+    typedef Fetcher::RequestGenerator RequestGenerator;
 
     public:
  	ThreadingFetcher(IMessageEvents *message_events);
@@ -243,6 +250,7 @@ class ThreadingFetcher : IFetcherEvents {
 	int Begin(const Fetcher::Params& params);
     void SetMaxQueueSize(size_t request_size, size_t result_size);
     void SetResultCallback(ResultCallback result_cb);
+    void SetRequestGenerator(RequestGenerator req_generator);
 	void End();
 	void UpdateParams(const Fetcher::Params &params);
 	int PutRequest(const RawFetcherRequest& request);
@@ -284,6 +292,7 @@ class ThreadingFetcher : IFetcherEvents {
 	boost::shared_ptr<Fetcher> fetcher_;
     bool param_changed_;
     ResultCallback result_cb_;
+    RequestGenerator req_generator_;
 };
 
 #endif   /* ----- #ifndef FETCHER_INC  ----- */

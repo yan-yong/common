@@ -111,7 +111,7 @@ bool taskValidation(const char *url, URI &uri);
 /// return true if str is not NULL and strlen(str)>0
 bool noneEmptyStr(const char * str);
 
-void tolower(std::string &str);
+//void tolower(std::string &str);
 
 /// \return true if response is HTML page
 bool isHtml(const Response& response);

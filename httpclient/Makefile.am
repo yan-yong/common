@@ -11,6 +11,5 @@ lib_LTLIBRARIES=libhttp_client.la
 libhttp_client_la_SOURCES=$(source_list)
 
 sbin_PROGRAMS=test_httpclient
-test_httpclient_SOURCES=unit_test_httpclient.cpp 
+test_httpclient_SOURCES=unit_test_httpclient.cpp $(source_list) 
 test_httpclient_CPPFLAGS=$(AM_CPPFLAGS)
-test_httpclient_LDFLAGS=-lhttp_client

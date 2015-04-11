@@ -442,7 +442,7 @@ struct RequestData* HttpClient::CreateRequestData(void * request_context)
     char conn_addr_str[200];
     fetcher_->ConnectionToString(res->conn_, conn_addr_str, 200);
     LOG_INFO("%s, FETCH request %s.\n", req->Uri.c_str(), conn_addr_str);
-    //req->Dump();
+    req->Dump();
     return req; 
 }
 
