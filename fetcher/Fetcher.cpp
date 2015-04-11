@@ -606,6 +606,8 @@ void Fetcher::AddConnList(int *n)
     unsigned conn_quota = AvailableQuota();
     if(req_generator_)
     {
+        if(conn_quota == 0)
+            return;
         std::vector<RawFetcherRequest> req_vec;
         req_generator_(conn_quota, req_vec);
         for(unsigned i = 0; i < req_vec.size(); i++)
@@ -623,7 +625,7 @@ void Fetcher::AddConnList(int *n)
     struct list_head *pos, *prev;
     list_for_each_safe(pos, prev, conn_list)
     {
-        if((unsigned)*n < conn_quota)
+        if((unsigned)*n > conn_quota)
             break;
         Connection *conn = list_entry(pos, Connection, list);
         list_del(pos);

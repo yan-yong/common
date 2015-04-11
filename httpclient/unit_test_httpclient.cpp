@@ -4,19 +4,8 @@
 void HandleResult(boost::shared_ptr<HttpClient::FetchResult> result)
 {
     HttpFetcherResponse* resp = result->resp_;
-    struct addrinfo * ai = (struct addrinfo *)result->contex_;
-    char ip_str[100];
-    uint16_t port;
-    get_addr_string(ai->ai_addr, ip_str, 100, port);
-    if(result->error_.error_num() == RS_OK)
-    {
-        LOG_ERROR("===== %s %hu\n", ip_str, port);
-    }
-    else
-    {
-        LOG_ERROR("## throw %s %hu\n", ip_str, port);
-    }
-    freeaddrinfo(ai);
+    if(resp)
+        fprintf(stderr, "Size: %zd\nContent: %s\n", resp->Body.size(), &(resp->Body[0]));
 }
 
 int main()
@@ -34,23 +23,10 @@ int main()
     fetch_params.socket_sndbuf_size = 8192;
     http_client.SetFetcherParams(fetch_params);
 
-    uint16_t general_port [] = {80, 8080, 3128, 8118, 808};
-    for(int i = 0; i < 255; i++)
-        for(int j = 0; j < 255; j++)
-            for(unsigned k = 0; k < sizeof(general_port)/sizeof(*general_port); k++) 
-            {
-                uint16_t port = general_port[k];
-                char ip_str[200];
-                snprintf(ip_str, 200, "36.250.%d.%d", i, j);
-                struct addrinfo* ai = create_addrinfo(ip_str, port);
-                if(!http_client.PutRequest("http://www.baidu.com/img/baidu_jgylogo3.gif", ai, NULL, NULL, 
-                        BatchConfig::DEFAULT_RES_PRIOR, BatchConfig::DEFAULT_BATCH_ID, ai))
-                {
-                    sleep(10);
-                    LOG_ERROR("sleep ...\n");
-                }
-            }
-    //http_client.PutRequest("http://www.baidu.com/");
+    struct addrinfo *ai = create_addrinfo("84.145.138.23", 80);
+    //struct addrinfo *ai = create_addrinfo("202.108.250.249", 443);
+    http_client.PutRequest("https://i.alipayobjects.com/i/ecmng/png/201501/4Jdkug9K2v.png",
+        NULL, NULL, NULL, BatchConfig::DEFAULT_RES_PRIOR, BatchConfig::DEFAULT_BATCH_ID, ai);
     sleep(1000);
     return 0;
 }

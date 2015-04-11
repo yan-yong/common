@@ -34,6 +34,7 @@ class HttpFetcherRequest : public FetcherRequest, public Request
 	}
 	virtual void Close();
     void Dump();
+    size_t Size();
 };
 
 class HttpFetcherResponse : public FetcherResponse, public Response
