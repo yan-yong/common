@@ -15,11 +15,11 @@
 #define LOG_LEVEL_MASK    0x07
 #define LOG_THREAD        0x40
 
-#define LOG_INFO(format, ...) log_printf(LOG_LEVEL_INFO, stderr, format, ##__VA_ARGS__)
+#define LOG_INFO(format, ...) log_printf(LOG_LEVEL_INFO, stdout, format, ##__VA_ARGS__)
 #define LOG_NOTICE(format, ...) log_printf(LOG_LEVEL_NOTICE, stderr, format, ##__VA_ARGS__)
 #define LOG_WARNING(format, ...) log_printf(LOG_LEVEL_WARNING, stderr, format, ##__VA_ARGS__)
 #define LOG_ERROR(format, ...) log_printf(LOG_LEVEL_ERROR, stderr, format, ##__VA_ARGS__)
-#define LOG_DEBUG(format, ...) log_printf(LOG_LEVEL_DEBUG, stderr, format, ##__VA_ARGS__)
+#define LOG_DEBUG(format, ...) log_printf(LOG_LEVEL_DEBUG, stdout, format, ##__VA_ARGS__)
 
 extern "C" void log_printf(unsigned int flags, FILE* stream, const char* format, ...) __attribute__((format(printf, 3, 4)));
 

@@ -269,12 +269,8 @@ void HttpClient::HandleRedirectResult( Resource* res,
         LOG_ERROR("%s, invalid uri\n", ri.to_url.c_str());
         return;
     }
-    Resource* root_res = res->RootResource();
-    HandleRequest(uri, (RequestPtr)root_res->contex_, 
-        root_res->cfg_, root_res->prior_, 
-        root_res->GetUserHeaders(), 
-        root_res->GetPostContent(),
-        root_res, NULL); 
+    Resource*  root_res = res->RootResource();
+    request_queue_.enqueue(new FetchRequest(uri, root_res)); 
 }
 
 REDIRECT_TYPE HttpClient::__get_redirect_type(int status_code)
@@ -290,22 +286,42 @@ REDIRECT_TYPE HttpClient::__get_redirect_type(int status_code)
     return type;
 }
 
-void HttpClient::HandleRequest(
-        const  URI&  uri,
-        void*   contex,
-        BatchConfig* batch_cfg,  
-        ResourcePriority prior,
-        const MessageHeaders* user_headers,
-        const char* post_content,
-        Resource* root_res,
-        ServChannel* serv_channel)
+void HttpClient::HandleRequest(RequestPtr request)
 {
-    Resource* res = Storage::Instance()->CreateResource(
-        uri, contex, batch_cfg, prior, user_headers, 
-        post_content, root_res, serv_channel);
+    char scheme = str2protocal(request->uri_.Scheme());
+    ServChannel * proxy_serv = NULL;
+    Resource* res = NULL;
+    //重定向的request
+    if(request->root_res_)
+    {
+        if(request->root_res_->proxy_state_ != Resource::NO_PROXY)
+            proxy_serv = res->serv_;
+        res = Storage::Instance()->CreateResource(
+            request->uri_,  request->root_res_->contex_, 
+            request->root_res_->cfg_, request->prior_,
+            request->root_res_->GetUserHeaders(),
+            request->root_res_->GetPostContent(), 
+            request->root_res_, proxy_serv);
+    }
+    //非重定向request
+    else 
+    {
+        if(request->proxy_ai_)
+        {
+            proxy_serv = Storage::Instance()->AcquireServChannel(
+                scheme, request->proxy_ai_, serv_concurency_mode_, 
+                serv_max_err_rate_,   serv_max_err_count_,   
+                serv_err_delay_sec_,  local_addr_);
+        }
+        res = Storage::Instance()->CreateResource(
+            request->uri_, request->contex_, request->batch_cfg_, 
+            request->prior_, request->user_headers_, 
+            request->content_, NULL, proxy_serv);
+    }
+
     __sync_fetch_and_add(&cur_req_size_, 1);
     HostChannel * host_channel = res->host_;
-    if(serv_channel == NULL)
+    if(proxy_serv == NULL)
     {
         if(channel_manager_->CheckResolveDns(host_channel, 
             dns_update_time_, dns_error_time_))
@@ -324,7 +340,8 @@ void HttpClient::HandleRequest(
             return;
         } 
     }
-     //加入到超时队列中, 0表示不超时
+
+    //加入到超时队列中, 0表示不超时
     time_t timeout_stamp = res->GetTimeoutStamp();
     if(timeout_stamp > 0)
         timed_lst_map_.add_back(timeout_stamp, *res);
@@ -337,7 +354,7 @@ bool HttpClient::PutRequest(
     char* content,
     ResourcePriority prior,
     std::string batch_id,
-    struct addrinfo * ai)
+    struct addrinfo * proxy_ai)
 {
     if(cur_req_size_ > max_req_size_)
     {
@@ -352,10 +369,10 @@ bool HttpClient::PutRequest(
         LOG_ERROR("%s, invalid uri\n", url.c_str());
         return false;
     }
+    BatchConfig * batch_cfg = Storage::Instance()->AcquireBatchCfg(
+            batch_id, default_batch_cfg_);
     request_queue_.enqueue(new FetchRequest(uri, contex, 
-        user_headers, content, prior, batch_id, ai));
-    //fprintf(stderr, "1"); 
-    //LOG_INFO("%s, RECV request.\n", url.c_str()); 
+        user_headers, content, prior, batch_cfg, proxy_ai));
     return true;
 }
 
@@ -398,12 +415,16 @@ time_t HttpClient::__handle_timeout_list()
 IFetchMessage* HttpClient::CreateFetchResponse(const FetchAddress& address, void * request_context)
 {
     Resource * p_res = (Resource*) request_context;
+    size_t max_body_size = p_res->cfg_->max_body_size_;
+    size_t truncate_size = p_res->cfg_->truncate_size_;
+    if(p_res->proxy_state_ == Resource::PROXY_CONNECT)
+    {
+        max_body_size = 0;
+        truncate_size = 0;
+    } 
     HttpFetcherResponse* resp = new HttpFetcherResponse(address.remote_addr, 
-        address.remote_addrlen,
-        address.local_addr,
-        address.local_addrlen,
-        p_res->cfg_->max_body_size_,
-        p_res->cfg_->truncate_size_);
+        address.remote_addrlen, address.local_addr,
+        address.local_addrlen, max_body_size, truncate_size);
     return resp;
 }
 
@@ -418,26 +439,40 @@ struct RequestData* HttpClient::CreateRequestData(void * request_context)
     BatchConfig* cfg = res->cfg_;
     HttpFetcherRequest* req = new HttpFetcherRequest();
     req->Clear();
-    req->Uri    = res->GetUrl();
-    req->Method = res->GetHttpMethod();
     req->Version= res->GetHttpVersion();
-    req->Headers.Add("Host", res->GetHostWithPort());
-    req->Headers.Add("Accept", cfg->accept_);
-    req->Headers.Add("Accept-Language", cfg->accept_language_);
-    req->Headers.Add("Accept-Encoding", cfg->accept_encoding_);
-    if(strlen(res->cfg_->user_agent_))
-        req->Headers.Add("User-Agent", cfg->user_agent_);
-    if(res->GetPostContent())
+    req->Method = res->GetHttpMethod();
+    //GET or POST
+    if(req->Method == "GET" || req->Method == "POST")
     {
-        char content_len[16];
-        snprintf(content_len, 16, "%zd", strlen(res->GetPostContent()));
-        req->Headers.Add("Content-Type", "application/x-www-form-urlencoded");
-        req->Headers.Add("Content-Length", content_len);
+        req->Uri    = res->GetUrl();
+        req->Headers.Add("Host", res->GetHostWithPort());
+        req->Headers.Add("Accept", cfg->accept_);
+        req->Headers.Add("Accept-Language", cfg->accept_language_);
+        req->Headers.Add("Accept-Encoding", cfg->accept_encoding_);
+        if(strlen(res->cfg_->user_agent_))
+            req->Headers.Add("User-Agent", cfg->user_agent_);
+        // add post content
+        if(res->GetPostContent())
+        {
+            const char* post_content = res->GetPostContent();
+            size_t content_len       = strlen(post_content);
+            char content_len_str[16];
+            snprintf(content_len_str, 16, "%zd", content_len);
+            req->Headers.Add("Content-Type", "application/x-www-form-urlencoded");
+            req->Headers.Add("Content-Length", content_len_str);
+            req->Body.assign(post_content, post_content + content_len);
+        }
+        // add user header
+        const MessageHeaders* user_headers = res->GetUserHeaders();
+        for(unsigned i = 0; user_headers && i < user_headers->Size(); i++)
+            req->Headers.Set((*user_headers)[i].Name, (*user_headers)[i].Value);
     }
-    // add user header
-    const MessageHeaders* user_headers = res->GetUserHeaders();
-    for(unsigned i = 0; user_headers && i < user_headers->Size(); i++)
-        req->Headers.Set((*user_headers)[i].Name, (*user_headers)[i].Value);
+    else
+    {
+        req->Uri = res->GetHostWithPort(true);
+        req->Headers.Add("Host", res->GetHostWithPort(true));
+    }
+
     req->Close();
     char conn_addr_str[200];
     fetcher_->ConnectionToString(res->conn_, conn_addr_str, 200);
@@ -456,6 +491,13 @@ void HttpClient::ProcessResult(RawFetcherResult& fetch_result)
     Resource * res = (Resource*)fetch_result.context;
     HttpFetcherResponse *resp = (HttpFetcherResponse *)fetch_result.message;
     assert(res);
+    // handle proxy result
+    if(res->proxy_state_ != Resource::NO_PROXY && 
+        !HandleProxyResult(fetch_result))
+    {
+        return;
+    }
+
     fetcher_->CloseConnection(res->conn_);
     channel_manager_->ReleaseConnection(res);
     ServChannel * serv = res->serv_;
@@ -489,6 +531,44 @@ void HttpClient::ProcessResult(RawFetcherResult& fetch_result)
     }
 }
 
+// https隧道, 先用http connect
+// return false: no continious; else, continious next process
+bool HttpClient::HandleProxyResult(RawFetcherResult& fetch_result)
+{    
+    Resource * res = (Resource*)fetch_result.context;
+    HttpFetcherResponse *resp = (HttpFetcherResponse *)fetch_result.message;
+    int err_num = fetch_result.err_num;
+
+    switch(res->proxy_state_)
+    {
+        //对于https proxy请求，只是重置成PROXY_CONNECT，方便下次连接
+        case Resource::PROXY_HTTPS:
+        {
+            res->proxy_state_ = Resource::PROXY_CONNECT;
+            break;
+        }
+        case Resource::PROXY_CONNECT:
+        {
+            //走正常流程
+            if(err_num)
+                break;
+            if(resp->StatusCode == 200)
+            {
+                res->proxy_state_ = Resource::PROXY_HTTPS; 
+                fetcher_->SetConnectionScheme(res->conn_, PROTOCOL_HTTPS);
+                __fetch_resource(res);
+                return false;
+            }
+            break;
+        }
+        default:
+        {
+            break;
+        }
+    }
+    return true;
+}
+
 void HttpClient::Pool()
 {
     struct timeval timeout; 
@@ -499,30 +579,15 @@ void HttpClient::Pool()
     RawFetcherResult fetch_result;
     while (fetcher_->GetResult(&fetch_result, &timeout) == 0) 
         ProcessResult(fetch_result);
+
     //handle request
-    size_t cnt = 0;
     RequestPtr request;
     while(request_queue_.try_dequeue(request))
     {
-        ++cnt;
-        BatchConfig * batch_cfg = Storage::Instance()->AcquireBatchCfg(
-            request->batch_id_, default_batch_cfg_);
-        ServChannel * serv_channel = NULL;
-        if(request->ai_)
-        {
-            char scheme = str2protocal(request->uri_.Scheme());
-            serv_channel = Storage::Instance()->AcquireServChannel(
-                    scheme, request->ai_, serv_concurency_mode_, 
-                    serv_max_err_rate_,   serv_max_err_count_,   
-                    serv_err_delay_sec_,  local_addr_ );
-        }
-        HandleRequest(request->uri_, request->contex_, batch_cfg, 
-            request->prior_, request->user_headers_, 
-            request->content_, NULL, serv_channel);
+        HandleRequest(request);
         delete request;
     }
-    if(cnt)
-        LOG_INFO("request size: %zd\n", cnt); 
+
     //handle dns result
     DnsResultType dns_result;
     while(dns_queue_.try_dequeue(dns_result))

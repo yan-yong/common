@@ -184,12 +184,22 @@ private:
     ~Resource();
 
 public:
+    enum ProxyState
+    {
+        NO_PROXY,
+        PROXY_HTTP, 
+        PROXY_CONNECT,
+        PROXY_HTTPS
+    };
+
+public:
     void Initialize(HostChannel* host_channel,
         const std::string& suffix, ResourcePriority prior, 
         void* contex, const MessageHeaders * user_headers,
         const char* post_content, Resource* parent_res, 
         BatchConfig *cfg);
-    std::string GetHostWithPort() const;
+    std::string GetHostWithPort(bool with_port = false) const;
+    void SetProxyServ(ServChannel* serv_channel);
     void Destroy();
     std::string GetUrl() const;
     URI GetURI() const;
@@ -208,13 +218,14 @@ public:
 
 public:
     //是否有自定义头
-    char has_user_headers_: 1;
+    char has_user_headers_:     1;
     //是否是重定向Resource
-    char is_redirect_:      1;
-    char has_post_content_: 1;
+    char is_redirect_:          1;
+    char has_post_content_:     1;
     //引用当前Resource的重定向Resource数目
-    char root_ref_:         5;
-    unsigned           cur_retry_times_;
+    char root_ref_:             5;
+    unsigned cur_retry_times_;
+    ProxyState proxy_state_;
     ResourcePriority   prior_;
     linked_list_node_t queue_node_;
     linked_list_node_t timed_lst_node_;

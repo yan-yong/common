@@ -347,6 +347,9 @@ void ChannelManager::ReleaseConnection(Resource* res)
     //SpinGuard serv_guard(__serv_lock(res->serv_));
     if(res->serv_ && res->conn_)
     {
+        //reset back to HTTPS
+        if(res->proxy_state_ == Resource::PROXY_CONNECT)
+            ThreadingFetcher::SetConnectionScheme(res->conn_, PROTOCOL_HTTPS);
         if(res->serv_->concurency_mode_ != ServChannel::CONCURENCY_NO_LIMIT)
             (res->serv_->conn_storage_).push_back(res->conn_);
         else
@@ -400,9 +403,12 @@ void ChannelManager::PopAvailableResources(
         Resource*    res = PopResource(serv_channel);
         serv_channel->SetFetchTime(cur_time);
         res->conn_       = conn;
+        // proxy connect时, 使用http协议
+        if(res->proxy_state_ == Resource::PROXY_CONNECT)
+            ThreadingFetcher::SetConnectionScheme(res->conn_, PROTOCOL_HTTP);
         res->serv_       = serv_channel;
         serv_channel->fetching_lst_.add_back(*res);
-        res_vec.push_back(res); 
+        res_vec.push_back(res);
     }
 }
 

@@ -339,7 +339,7 @@ int Fetcher::SSLNew(Connection *conn)
 int Fetcher::SSLInitialize(Connection *conn)
 {
     assert(conn);
-    if (SSLNew(conn) >= 0)
+    if (conn->ssl || SSLNew(conn) >= 0)
     {
 	if (SSLConnect(conn) >= 0)
 	    return 0;
@@ -1136,6 +1136,11 @@ Connection * ThreadingFetcher::CreateConnection(Connection* conn)
 {
     return CreateConnection(conn->scheme,conn->socket_family,
             conn->socket_type, conn->protocol, conn->address);
+}
+
+void ThreadingFetcher::SetConnectionScheme(Connection* conn, int scheme)
+{
+    conn->scheme = scheme;
 }
 
 Connection* ThreadingFetcher::CreateConnection(

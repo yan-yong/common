@@ -242,6 +242,7 @@ class ThreadingFetcher : IFetcherEvents {
 		const FetchAddress& address
 		);
     static Connection* CreateConnection(Connection*);
+    static void SetConnectionScheme(Connection*, int scheme);
 	static void FreeConnection(Connection *conn);
 	static int GetSockAddr(Connection* conn, struct sockaddr* addr);
     static void ConnectionToString(Connection * conn, char* str, size_t str_len); 

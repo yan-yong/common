@@ -28,26 +28,37 @@ public:
         MessageHeaders* user_headers_;
         char* content_;
         ResourcePriority prior_;
-        std::string batch_id_;
-        struct addrinfo * ai_;
+        BatchConfig * batch_cfg_;
+        struct addrinfo * proxy_ai_;
+        Resource*         root_res_;
 
         FetchRequest()
         {
-            memset(this, 0, sizeof(FetchRequest));
+            memset(&contex_, 0, sizeof(struct FetchRequest) - sizeof(URI));
         }
+
         FetchRequest(
             const URI& uri,
             void*  contex,
             MessageHeaders* user_headers,
             char* content,
             ResourcePriority prior,
-            std::string batch_id,
-            struct addrinfo * ai):
+            BatchConfig* batch_cfg,
+            struct addrinfo * proxy_ai):
         uri_(uri), contex_(contex),
         user_headers_(user_headers),
         content_(content), prior_(prior), 
-        batch_id_(batch_id), ai_(ai)
-        {}
+        batch_cfg_(batch_cfg), proxy_ai_(proxy_ai)
+        {
+            root_res_ = NULL;
+        }
+        
+        FetchRequest(const URI& uri, Resource* root_res)
+        {
+            memset(&contex_, 0, sizeof(struct FetchRequest) - sizeof(URI));
+            uri_ = uri;
+            root_res_ = root_res;    
+        }
     };
 
     struct FetchResult 
@@ -96,15 +107,7 @@ protected:
     void Pool();
     void PutResult(FetchErrorType, HttpFetcherResponse*, void*);
     void PutDnsResult(DnsResultType dns_result);
-    void HandleRequest(
-        const  URI&  uri,
-        void*  contex,
-        BatchConfig* batch_cfg,  
-        ResourcePriority prior,
-        const MessageHeaders* user_headers,
-        const char* post_content,
-        Resource* root_res, 
-        ServChannel * serv_channel);
+    void HandleRequest(RequestPtr req);
 
     virtual struct RequestData* CreateRequestData(void *);
     virtual void FreeRequestData(struct RequestData *);
@@ -118,6 +121,7 @@ protected:
     virtual void HandleRedirectResult(Resource*, HttpFetcherResponse*, RedirectInfo);
     virtual void HandleHttpResponse3xx(Resource*, HttpFetcherResponse *);
     virtual void HandleHttpResponse2xx(Resource*, HttpFetcherResponse *);
+    virtual bool HandleProxyResult(RawFetcherResult& fetch_result);
 
 public:
     HttpClient(
@@ -131,7 +135,7 @@ public:
        char* content = NULL,
        ResourcePriority prior = BatchConfig::DEFAULT_RES_PRIOR,
        std::string batch_id   = BatchConfig::DEFAULT_BATCH_ID, 
-       struct addrinfo * ai   = NULL);
+       struct addrinfo * proxy_ai   = NULL);
     //virtual bool PutRequest(Resource* res);
     virtual void Open();
     virtual void Close();

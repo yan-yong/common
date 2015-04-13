@@ -98,7 +98,7 @@ public:
             const MessageHeaders* user_headers,
             const char* post_content,
             Resource* root_res,
-            ServChannel* serv_channel);
+            ServChannel* proxy_serv);
     
     void DestroyResource(Resource* res);
 };

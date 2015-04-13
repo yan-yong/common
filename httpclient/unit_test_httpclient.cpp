@@ -23,7 +23,7 @@ int main()
     fetch_params.socket_sndbuf_size = 8192;
     http_client.SetFetcherParams(fetch_params);
 
-    struct addrinfo *ai = create_addrinfo("84.145.138.23", 80);
+    struct addrinfo *ai = create_addrinfo("172.18.40.27", 80);
     //struct addrinfo *ai = create_addrinfo("202.108.250.249", 443);
     http_client.PutRequest("https://i.alipayobjects.com/i/ecmng/png/201501/4Jdkug9K2v.png",
         NULL, NULL, NULL, BatchConfig::DEFAULT_RES_PRIOR, BatchConfig::DEFAULT_BATCH_ID, ai);

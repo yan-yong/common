@@ -76,6 +76,10 @@ size_t HttpFetcherRequest::Size()
 
 int HttpFetcherResponse::OnHeadersComplete()
 {
+    // no body
+    if(!m_MaxBodySize)
+        return 0;
+
     int n = Headers.Find("Transfer-Encoding");
     if (n >= 0)
     {

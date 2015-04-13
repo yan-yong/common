@@ -155,7 +155,8 @@ void Resource::Initialize(
     is_redirect_     = 0;
     root_ref_     = 0;
     has_user_headers_= 0;
-    has_post_content_ = 0; 
+    has_post_content_= 0;
+    proxy_state_   = NO_PROXY; 
 
     if(user_headers || root_res || post_content)
         memset(pextend, 0, sizeof(ResExtend));
@@ -189,11 +190,20 @@ void Resource::Initialize(
     }
 } 
 
-std::string Resource::GetHostWithPort() const
+void Resource::SetProxyServ(ServChannel* serv_channel)
+{
+    serv_ = serv_channel;
+    if(host_->scheme_ == PROTOCOL_HTTPS)
+        proxy_state_ = PROXY_CONNECT;
+    else
+        proxy_state_ = PROXY_HTTP;
+}
+
+std::string Resource::GetHostWithPort(bool with_port) const
 {
     char buf[2048];
     size_t sz = snprintf(buf, 2048, "%s", host_->host_.c_str());
-    if(!IsHttpDefaultPort(host_->scheme_, host_->port_))
+    if(with_port || !IsHttpDefaultPort(host_->scheme_, host_->port_))
     {
         snprintf(buf + sz, 2048 - sz, ":%hu", host_->port_);
     }
@@ -207,6 +217,8 @@ std::string Resource::GetUrl() const
     
 std::string Resource::GetHttpMethod() const
 {
+    if(proxy_state_ == PROXY_CONNECT)
+        return "CONNECT";
     return has_post_content_ ? "POST":"GET";
 }
 

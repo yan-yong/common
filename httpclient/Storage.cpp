@@ -239,7 +239,7 @@ Resource* Storage::CreateResource(
         const MessageHeaders* user_headers,
         const char* post_content,
         Resource* root_res,
-        ServChannel* serv_channel)
+        ServChannel* proxy_serv)
 {
     if(close_)
         return NULL;
@@ -253,7 +253,8 @@ Resource* Storage::CreateResource(
         suffix += "?" + uri.Query();
     res->Initialize(host_channel, suffix, prior, contex, 
             user_headers, post_content, root_res, batch_cfg);
-    res->serv_ = serv_channel;
+    if(proxy_serv)
+        res->SetProxyServ(proxy_serv);
     channel_manager_->AddResource(res);
     return res;
 }
