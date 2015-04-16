@@ -514,6 +514,10 @@ int Fetcher::ConnectToServer(Connection *conn)
         return -1;
     }
 
+    int on = 1;
+    if(setsockopt(conn->sockfd, SOL_SOCKET, SO_REUSEADDR, &on, sizeof(on)) < 0)
+        return -1;
+
     if (conn->address.local_addr != NULL) {
 	if (bind(conn->sockfd, conn->address.local_addr, conn->address.local_addrlen) == -1) {
 	    assert(false);
