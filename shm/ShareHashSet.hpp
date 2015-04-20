@@ -34,7 +34,7 @@ private:
                 ret = true;
                 break;
             }
-            else if(is_delete && first_delete_idx < 0)
+            if(is_delete && first_delete_idx < 0)
             {
                 first_delete_idx = hash_idx;
             }
@@ -44,6 +44,8 @@ private:
             if(hash_idx == src_hash_key)
                 break;
         }
+        if(!ret && first_delete_idx >= 0)
+            hash_idx = first_delete_idx;
     }
 
 public:
