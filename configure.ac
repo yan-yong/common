@@ -67,7 +67,8 @@ AC_ARG_WITH([profile],
 AC_CONFIG_FILES([\
         Makefile
 	log/Makefile
-        httpserver/Makefile
+	async_httpserver/Makefile
+	httpserver/Makefile
 	judyarray/Makefile
 	judyarray/JudyHS/Makefile
 	judyarray/Judy1/Makefile
