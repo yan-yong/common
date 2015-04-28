@@ -1,5 +1,4 @@
 /**
- *   @author yanyong 
  */
 #include "Fetcher.hpp"
 

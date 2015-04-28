@@ -1,5 +1,4 @@
 /**
- *  @author: yanyong 
  */
 
 #ifndef  FETCHER_INC
