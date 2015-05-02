@@ -5,29 +5,14 @@
 #include <sstream>
 #include <string>
 #include <assert.h>
-
-struct linked_list_node_t
-{
-    linked_list_node_t *next;
-    linked_list_node_t *prev;
-
-    linked_list_node_t()
-    {
-        next = this;
-        prev = this;
-    }
-    bool empty()
-    {
-        return next == this && prev == this;
-    }
-};
+#include "linked_node.hpp"
 
 template <typename T, linked_list_node_t T::*list_node>
 class linked_list_t
 {
 public:
     linked_list_t() { _head.next = _head.prev = &_head; }
-    linked_list_t& operator =(const linked_list_t &) { _head.next = _head.prev = &_head; return *this; }
+    linked_list_t& operator =(const linked_list_t & t) { _head = t._head; return *this; }
     bool empty() const { return _head.next == &_head; }
     void clear() { _head.next = _head.prev = &_head; }
     linked_list_node_t& head() { return _head; }

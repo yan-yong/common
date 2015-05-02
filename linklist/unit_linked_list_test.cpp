@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <ostream>
 #include "linked_list.hpp"
+#include "shared_linked_list.hpp"
 #include "linked_list_map.hpp"
 using namespace std;
 
@@ -18,28 +19,34 @@ ostream& operator << (ostream & os, const Obj& obj)
 
 int main()
 {
-    linked_list_t<Obj, &Obj::node_> lst;
+    typedef boost::shared_ptr<Obj> shared_ptr_t;
+    shared_linked_list_t<Obj, &Obj::node_> share_lst;
+    {   
+        shared_ptr_t obj1(new Obj(1));
+        shared_ptr_t obj2(new Obj(2));
+        shared_ptr_t obj3(new Obj(3));
+        shared_ptr_t obj4(new Obj(4));
+
+        share_lst.add_back(obj2);
+        share_lst.add_back(obj1);
+        share_lst.add_front(obj3);
+        share_lst.add_back(obj4);
+    }   
+    printf("%s\n", share_lst.to_string().c_str());
+    shared_ptr_t ptr = share_lst.get_front();
+    std::cout<<*ptr<<std::endl;
+    share_lst.pop_front();
+    printf("%s\n", share_lst.to_string().c_str());
+    share_lst.pop_back();
+    printf("%s\n", share_lst.to_string().c_str());
+
+    linked_list_t<Obj, &Obj::node_> shared_lst;
     Obj obj1(1);
     Obj obj2(2);
     Obj obj3(3);
     Obj obj4(4);
     Obj obj11(11);
     Obj obj22(22);
-
-    /*
-    lst.add_back(obj2);
-    lst.add_back(obj1);
-    lst.add_front(obj3);
-    lst.add_back(obj4);
-    
-    linked_list_t<Obj, &Obj::node_> lst1;
-    lst1.add_front(obj11);
-    lst1.add_front(obj22);
-    lst.splice_back(lst1);
-    linked_list_t<Obj, &Obj::node_> lst2;
-    lst.splice_front(lst2);
-    lst.pop_back();
-    */
     
     linked_list_map<int, Obj, &Obj::node_> tmp_map;
     tmp_map.add_back(2, obj2);
