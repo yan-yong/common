@@ -7,13 +7,15 @@
 #include <signal.h>
 #include <string>
 #include "boost/lexical_cast.hpp"
+#include <boost/shared_ptr.hpp>
 #include <boost/enable_shared_from_this.hpp>
 #include <boost/date_time/posix_time/posix_time.hpp>
 #include <boost/function.hpp>
 #include "reply.hpp"
 #include "request.hpp"
 #include "log/log.h"
-#include "linklist/linked_list_map.hpp"
+#include "linklist/shared_linked_list.hpp"
+#include "dnsresolver/DNSResolver.hpp"
 
 namespace http
 {
@@ -23,13 +25,15 @@ namespace http
     }
 }
 
+typedef boost::shared_ptr<boost::asio::ip::tcp::socket> sock_ptr_t;
+typedef boost::shared_ptr<http::server4::connection> conn_ptr_t;
+
 class HttpServer: public boost::enable_shared_from_this<HttpServer>
 {
 
 public:
-    typedef boost::function<void (http::server4::connection*)> RecvReqHandler;
-    typedef boost::function<void (http::server4::connection*)> FinishRespHandler;
-    typedef boost::asio::ip::tcp::socket* sock_ptr_t;
+    typedef boost::function<void (conn_ptr_t)> ReceivedHandler;
+    typedef boost::function<void (conn_ptr_t)> WrittenHandler;
 
 private:
     time_t conn_timeout_sec_;
@@ -40,45 +44,55 @@ private:
 
     boost::asio::io_service io_service_;
     boost::asio::io_service::work io_work_;
-    RecvReqHandler recv_req_handler_;
-    FinishRespHandler fin_resp_handler_;
-    void* timeout_map_;
+    ReceivedHandler received_handler_;
+    WrittenHandler  written_handler_;
+    void* conn_lst_;
+    DNSResolver dns_resolver_;
+    bool stop_;
 
 protected:
-    /// 接收到请求时的处理函数
-    virtual void handle_recv_request(http::server4::connection*);
+    /// 接收到http请求时的处理函数
+    void http_request_received(conn_ptr_t);
 
-    /// 答复完成时的处理函数
-    virtual void handle_finish_response(http::server4::connection*);
+    /// http完成时的处理函数
+    void http_request_finished(conn_ptr_t);
 
     /// 接收到客户端的连接
-    virtual void handle_recv_connect(sock_ptr_t client_sock, const boost::system::error_code&);
+    void http_connect_received(sock_ptr_t client_sock, const boost::system::error_code&);
 
-    void update_timeout(http::server4::connection*);
+    void fetch_dns_result(DNSResolver::DnsResultType dns_result);
 
-    void remove_timeout(http::server4::connection*);
-    
-    void check_timeout();
- 
-    virtual void handle_conn_timeout(http::server4::connection* conn);
+    virtual void handle_normal_request(conn_ptr_t);
+
+    virtual void handle_tunnel_request(conn_ptr_t);
+
+    virtual void handle_dns_result(DNSResolver::DnsResultType dns_result);
+
+    void handle_conn_update(conn_ptr_t);
+
+    void remove_connection(conn_ptr_t);
+
+    /// 超时处理
+    void check_timeout(); 
 
 public:
     HttpServer();
 
-    ~HttpServer()
-    {
-    }
+    virtual ~HttpServer();
 
-    virtual int initialize(std::string ip, 
+    int initialize(std::string ip, 
         std::string port, time_t conn_timeout_sec = 30);
 
-    virtual int run();
-
-    void set_recv_request_handler(RecvReqHandler handler);
-
-    void set_finish_response_handler(FinishRespHandler handler);
+    int run();
 
     void stop();
+
+    void post(boost::function<void (void)> cb);
+
+    void set_received_handler(ReceivedHandler handler)
+    {
+        received_handler_ = handler;
+    }
 
     friend class http::server4::connection;
  };

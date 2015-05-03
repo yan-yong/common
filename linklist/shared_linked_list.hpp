@@ -46,6 +46,14 @@ public:
         return __shared_ptr(__entry(node));
     }
 
+    shared_ptr_t entry(T* t)
+    {
+        typename shared_map_t::iterator it = instances_.find(t);
+        if(it != instances_.end() )
+            return it->second;
+        return shared_ptr_t();
+    }
+
     //make sure: node.*list_node is not linked in another linklist, if so, you should del it first!!
     void add_front(shared_ptr_t node)
     {
@@ -79,33 +87,39 @@ public:
     //add node before cur
     void add_prev(shared_ptr_t node, shared_ptr_t cur)
     {
-        assert(node->*list_node.empty());
-        (cur.*list_node).prev->next = &(node->*list_node);
-        (node->*list_node).prev = (cur->*list_node).prev;
-        (node->*list_node).next = &(cur->*list_node);
-        (cur->*list_node).prev = &(node->*list_node);
-        instances_[node.get()] = node;
+        T* raw_ptr = node.get();
+        T* cur_ptr = cur.get();
+        assert(raw_ptr->*list_node.empty());
+        (cur_ptr->*list_node).prev->next = &(raw_ptr->*list_node);
+        (raw_ptr->*list_node).prev = (cur_ptr->*list_node).prev;
+        (raw_ptr->*list_node).next = &(cur_ptr->*list_node);
+        (cur_ptr->*list_node).prev = &(raw_ptr->*list_node);
+        instances_[raw_ptr] = node;
     }
 
     void add_next(shared_ptr_t node, shared_ptr_t cur)
     {
-        assert(node->*list_node.empty());
-        (cur->*list_node).next->prev = &(node->*list_node);
-        (node->*list_node).next = (cur->*list_node).next;
-        (node->*list_node).prev = &(cur->*list_node);
-        (cur->*list_node).next = &(node->*list_node);
-        instances_[node.get()] = node;
+        T* raw_ptr = node.get();
+        T* cur_ptr = cur.get();
+        assert(raw_ptr->*list_node.empty());
+        (cur_ptr->*list_node).next->prev = &(raw_ptr->*list_node);
+        (raw_ptr->*list_node).next = (cur_ptr->*list_node).next;
+        (raw_ptr->*list_node).prev = &(cur_ptr->*list_node);
+        (cur_ptr->*list_node).next = &(raw_ptr->*list_node);
+        instances_[raw_ptr] = node;
     }
 
     bool del(shared_ptr_t node)
     {
-        if((node->*list_node).next != &(node->*list_node) && (node->*list_node).prev != &(node->*list_node))
+        T* raw_ptr = node.get();
+        if((raw_ptr->*list_node).next != &(raw_ptr->*list_node) && 
+            (raw_ptr->*list_node).prev != &(raw_ptr->*list_node))
         {
-            (node->*list_node).next->prev = (node->*list_node).prev;
-            (node->*list_node).prev->next = (node->*list_node).next;
-            (node->*list_node).next = &(node->*list_node);
-            (node->*list_node).prev = &(node->*list_node);
-            instances_.erase(node.get());
+            (raw_ptr->*list_node).next->prev = (raw_ptr->*list_node).prev;
+            (raw_ptr->*list_node).prev->next = (raw_ptr->*list_node).next;
+            (raw_ptr->*list_node).next = &(raw_ptr->*list_node);
+            (raw_ptr->*list_node).prev = &(raw_ptr->*list_node);
+            instances_.erase(raw_ptr);
             return true;
         }
         return false;

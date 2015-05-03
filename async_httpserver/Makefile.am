@@ -1,10 +1,10 @@
 include $(top_srcdir)/common.mk
 
 AM_CPPFLAGS=-I$(boost_path)/include -I$(top_srcdir)
-AM_LDFLAGS=-rdynamic -lpthread -L$(top_srcdir)/_lib -llog -lz -lhttpparser -lcrypto
+AM_LDFLAGS=-rdynamic -lpthread -L$(top_srcdir)/_lib -llog -lz -lhttpparser -lcrypto -lutility -ldns_resolver
 
-LDADD=$(boost_path)/lib/libboost_system.a
-LIBADD=$(boost_path)/lib/libboost_system.a
+LDADD=$(boost_path)/lib/libboost_system.a $(libev_path)/lib/libevent.a
+LIBADD=$(boost_path)/lib/libboost_system.a $(libev_path)/lib/libevent.a
 
 source_list=httpserver.cpp  mime_types.cpp  reply.cpp  request_parser.cpp connection.cpp
 

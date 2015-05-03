@@ -50,6 +50,8 @@ const std::string bad_gateway =
   "HTTP/1.0 502 Bad Gateway\r\n";
 const std::string service_unavailable =
   "HTTP/1.0 503 Service Unavailable\r\n";
+const std::string establish_ok = 
+  "HTTP/1.0 200 Connection established\r\n";
 
 boost::asio::const_buffer to_buffer(reply::status_type status)
 {
@@ -87,6 +89,8 @@ boost::asio::const_buffer to_buffer(reply::status_type status)
     return boost::asio::buffer(bad_gateway);
   case reply::service_unavailable:
     return boost::asio::buffer(service_unavailable);
+  case reply::establish_ok:
+    return boost::asio::buffer(establish_ok);
   default:
     return boost::asio::buffer(internal_server_error);
   }

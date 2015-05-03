@@ -1,20 +1,173 @@
 #include <boost/date_time/posix_time/posix_time.hpp>
 #include "httpserver.h"
-#include "connection.hpp" 
+#include "connection.hpp"
+#include "linklist/shared_linked_list.hpp" 
 
 using namespace http::server4;
 
-typedef linked_list_map<time_t, connection, &connection::node_> timeout_map_t;
+typedef shared_linked_list_t<connection, &connection::node_> conn_list_t;
+static const time_t DNS_CACHE_TIME = 3600; 
 
 HttpServer::HttpServer(): 
-    conn_timeout_sec_(0), io_work_(io_service_)
+    conn_timeout_sec_(0), io_work_(io_service_),
+    dns_resolver_(DNS_CACHE_TIME), stop_(false)
 {
-    timeout_map_ = (void*)new timeout_map_t;
+    conn_lst_ = (void*)new conn_list_t;
+    assert(dns_resolver_.Open() == 0);
 }
 
-void HttpServer::stop()
+HttpServer::~HttpServer()
 {
-    io_service_.stop();
+    stop();
+    delete (conn_list_t*)conn_lst_;
+    conn_lst_ = NULL;
+}
+
+void HttpServer::http_connect_received(sock_ptr_t client_sock, const err_code_t& ec)
+{
+    sock_ptr_t another_sock(new boost::asio::ip::tcp::socket(io_service_));
+    boost::function<void (const err_code_t&)> handler = 
+        boost::bind(&HttpServer::http_connect_received, shared_from_this(), another_sock, _1);
+    acceptor_->async_accept(*another_sock, handler);
+
+    if(!client_sock)
+        return;
+    if(ec)
+    {
+        LOG_ERROR("accept error: %s.\n", ec.message().c_str());
+        return;
+    }
+
+    conn_ptr_t conn(new connection(client_sock, this));
+    ((conn_list_t*)conn_lst_)->add_back(conn);
+    conn->read_http_request();
+}
+
+void HttpServer::http_request_received(conn_ptr_t conn)
+{
+    // The request was invalid.
+    if(!conn->is_valid_request())
+    {
+        conn->write_http_bad_request();
+        conn->set_keep_alive(0);
+        return;
+    }
+
+    request_ptr_t p_req = conn->get_request();
+    assert(p_req);
+    if(p_req->method == "CONNECT")
+    {
+        //对于CONNECT请求，强制keepalive
+        conn->set_keep_alive(1);
+        handle_tunnel_request(conn);
+        return;
+    }
+    handle_normal_request(conn);
+}
+
+void HttpServer::http_request_finished(conn_ptr_t conn)
+{
+    if(conn->is_error() || !conn->is_keep_alive())
+    {
+        remove_connection(conn);
+        return;
+    }
+
+    //keep_alive 则继续读入数据
+    request_ptr_t p_req = conn->get_request();
+    assert(p_req);
+    conn->read_http_request();
+}
+
+// 普通http请求
+void HttpServer::handle_normal_request(conn_ptr_t conn)
+{
+    //如果设置了handler, 则使用该handler
+    if(received_handler_)
+    {
+        received_handler_(conn);
+        return;
+    }
+    //default
+    conn->write_http_ok();
+}
+
+// 接收到http connect请求
+void HttpServer::handle_tunnel_request(conn_ptr_t conn)
+{
+    request_ptr_t p_req = conn->get_request();
+    std::string host = p_req->uri;
+    uint16_t    port = 443;
+    size_t sep_idx   = p_req->uri.find(":");
+    if(sep_idx != std::string::npos)
+    {
+        host = p_req->uri.substr(0, sep_idx);
+        port = atoi(p_req->uri.c_str() + sep_idx + 1);
+    }
+    DNSResolver::ResolverCallback resolver_cb = 
+        boost::bind(&HttpServer::fetch_dns_result, shared_from_this(), _1);
+    LOG_DEBUG("put to dns resolve: %s %d\n", host.c_str(), port);
+    dns_resolver_.Resolve(host, port, resolver_cb, (void*)conn.get());
+}
+
+void HttpServer::fetch_dns_result(DNSResolver::DnsResultType dns_result)
+{
+    io_service_.post(boost::bind(&HttpServer::handle_dns_result, shared_from_this(), dns_result));
+}
+
+void HttpServer::handle_dns_result(DNSResolver::DnsResultType dns_result)
+{
+    connection* raw_ptr = (connection*)dns_result->contex_;
+    assert(raw_ptr);
+    conn_ptr_t conn = ((conn_list_t*)conn_lst_)->entry(raw_ptr);
+    if(!conn)
+        return;
+    request_ptr_t p_req = conn->get_request();
+    if(!dns_result->ai_)
+    {
+        LOG_ERROR("Http connect %s dns error: %s %s\n", p_req->uri.c_str(), 
+            dns_result->err_msg_.c_str(), conn->peer_addr().c_str());
+        conn->write_http_service_unavailable();
+        conn->set_keep_alive(0);
+        return;
+    }
+    std::string addr_str;
+    uint16_t port = 0;
+    dns_result->GetAddr(addr_str, port);
+    sock_ptr_t tunnel_socket(new boost::asio::ip::tcp::socket(io_service_));
+    conn->tunnel_connect(tunnel_socket, boost::asio::ip::address::from_string(addr_str), port); 
+}
+
+void HttpServer::handle_conn_update(conn_ptr_t conn)
+{
+    if(conn_timeout_sec_)
+    {
+        ((conn_list_t*)conn_lst_)->del(conn);
+        ((conn_list_t*)conn_lst_)->add_back(conn);
+    }
+}
+
+void HttpServer::remove_connection(conn_ptr_t conn)
+{
+    if(conn_timeout_sec_)
+        ((conn_list_t*)conn_lst_)->del(conn);
+    conn->close();
+}
+
+void HttpServer::check_timeout()
+{
+    conn_list_t* conn_lst = (conn_list_t*)conn_lst_;
+    while(!conn_lst->empty())
+    {
+        conn_ptr_t conn = conn_lst->get_front();
+        if(conn->resp_time() + conn_timeout_sec_ > time(NULL))
+            break;
+        conn_lst->pop_front();
+        conn->handle_timeout();
+        remove_connection(conn);
+    }
+    boost::asio::deadline_timer t(io_service_, boost::posix_time::seconds(1));
+    t.async_wait(boost::bind(&HttpServer::check_timeout, shared_from_this()));
 }
 
 int HttpServer::initialize(std::string ip, std::string port, 
@@ -29,7 +182,7 @@ int HttpServer::initialize(std::string ip, std::string port,
         boost::asio::ip::tcp::resolver::query query(ip, port);
         acceptor_.reset(new boost::asio::ip::tcp::acceptor(io_service_, *resolver.resolve(query)));
         err_code_t err_code;
-        handle_recv_connect(NULL, err_code);
+        http_connect_received(sock_ptr_t(), err_code);
     }
     catch(std::exception& e)
     {
@@ -42,7 +195,7 @@ int HttpServer::initialize(std::string ip, std::string port,
     if(conn_timeout_sec_ > 0)
     {
         boost::asio::deadline_timer t(io_service_, boost::posix_time::seconds(1));
-        t.async_wait(boost::bind(&HttpServer::check_timeout, this));
+        t.async_wait(boost::bind(&HttpServer::check_timeout, shared_from_this()));
     }
     return 0;
 }
@@ -64,114 +217,16 @@ int HttpServer::run()
     return 0;
 }
 
-void HttpServer::check_timeout()
+void HttpServer::stop()
 {
-    timeout_map_t* tm_map = (timeout_map_t*)timeout_map_;
-    while(!tm_map->empty())
-    {
-        time_t timeout_stamp = 0;
-        connection* conn = NULL;
-        tm_map->get_front(timeout_stamp, conn);
-        if(timeout_stamp > time(NULL))
-            break;
-        tm_map->pop_front();
-        handle_conn_timeout(conn);
-    }
-    boost::asio::deadline_timer t(io_service_, boost::posix_time::seconds(1));
-    t.async_wait(boost::bind(&HttpServer::check_timeout, this));
+    if(!stop_)
+        return;
+    stop_ = true;
+    io_service_.stop();
+    dns_resolver_.Close();
 }
 
-void HttpServer::handle_recv_connect(
-    sock_ptr_t client_sock, const err_code_t& ec)
+void HttpServer::post(boost::function<void (void)> cb)
 {
-    sock_ptr_t another_sock = new boost::asio::ip::tcp::socket(io_service_);
-    boost::function<void (const err_code_t&)> handler = 
-        boost::bind(&HttpServer::handle_recv_connect, this, another_sock, _1);
-    acceptor_->async_accept(*another_sock, handler);
-
-    if(!client_sock)
-        return;
-
-    if(ec)
-    {
-        LOG_ERROR("accept error: %s.\n", ec.message().c_str());
-        delete client_sock;
-        return;
-    }
-
-    connection* conn = new connection(client_sock, this);
-    conn->read_data();
-}
-
-void HttpServer::handle_recv_request(connection* conn)
-{
-    if(conn->is_error())
-    {
-        //close
-        if(!conn->is_closed())
-        {
-            LOG_ERROR("recv request error %s from %s\n", 
-                conn->error_msg().c_str(), conn->to_string().c_str());
-        }
-        delete conn;
-        return;
-    }
-    // The request was invalid.
-    if(!conn->is_valid_request())
-    {
-        LOG_ERROR("recv invalid request from %s\n", conn->to_string().c_str());
-        boost::shared_ptr<reply> resp(new reply(reply::stock_reply(reply::bad_request)));
-        conn->write_data(resp);
-        return;
-    }
-    if(recv_req_handler_)
-    {
-        recv_req_handler_(conn);
-        return;
-    }
-    // default action
-    boost::shared_ptr<reply> resp(new 
-        reply(http::server4::reply::stock_reply(http::server4::reply::ok)));
-    conn->write_data(resp);
-}
-
-void HttpServer::handle_finish_response(connection* conn)
-{
-    if(conn->is_error())
-    {
-        LOG_ERROR("[HttpServer] Send to %s failed: %s.\n", 
-            conn->to_string().c_str(), conn->error_msg().c_str());
-        delete conn; 
-        return;
-    }
-
-    LOG_DEBUG("[HttpServer] Send to %s success.\n", conn->to_string().c_str());
-    if(!conn->is_keep_alive())
-    {
-        delete conn;
-        return;
-    }
-    conn->read_data();
-}
-
-void HttpServer::handle_conn_timeout(connection* conn)
-{
-    LOG_DEBUG("connection timeout: %s\n", conn->to_string().c_str());
-    conn->close();
-}
-
-void HttpServer::update_timeout(connection* conn)
-{
-    if(conn_timeout_sec_)
-    {
-        ((timeout_map_t*)timeout_map_)->del(*conn);
-        ((timeout_map_t*)timeout_map_)->add_back(
-            time(NULL) + conn_timeout_sec_, *conn);
-    }
-}
-
-void HttpServer::remove_timeout(connection* conn)
-{
-    if(conn_timeout_sec_)
-        ((timeout_map_t*)timeout_map_)->del(*conn);
+    io_service_.post(cb);
 }
