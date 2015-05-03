@@ -36,39 +36,21 @@ void fun(DNSResolver::DnsResultType dns_result)
 
 int main()
 {
-    DNSResolver resolver;
+    DNSResolver resolver(5);
     assert(resolver.Open("./resolv.conf") == 0);
     //resolver.Open("");
     std::string host[] = 
     {
-        "www.bing1.com.cn"
-        /*
-        ,
-        "www.baidu.com",
-        "www.sina.com",
         "www.google.com",
-        "www.google.com.hk",
-        "www.google.com.tw",
-        "www.renren.com",
-        "www.bing.com",
-        "www.ask.com",
-        "www.china.com",
-        "www.bing.com.cn",
-        "www.baidu.com",
-        "www.sina.com",
         "www.google.com",
-        "www.google.com.hk",
-        "www.google.com.tw",
-        "www.renren.com",
-        "www.bing.com",
-        "www.ask.com",
-        "www.china.com"
-        */
+        "www.google.com",
+        "www.example.com"
     };
     DNSResolver::ResolverCallback callback = fun;
     for(unsigned i = 0; i < sizeof(host)/sizeof(*host); i++)
     {
         resolver.Resolve(host[i], 80, callback, host[i].c_str());
+        sleep(1);
     }
     sleep(1000);
 }

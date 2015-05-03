@@ -1,5 +1,9 @@
 #include "DNSResolver.hpp"
 
+DNSResolver::DnsCache* DNSResolver::dns_cache_   = NULL;
+
+time_t DNSResolver::dns_cache_time_ = 0;
+
 struct addrinfo* DNSResolver::__copy_addrinfo(struct evutil_addrinfo *addr)
 {
     unsigned addr_sz = 0;
@@ -21,6 +25,29 @@ struct addrinfo* DNSResolver::__copy_addrinfo(struct evutil_addrinfo *addr)
     if(addr->ai_canonname)
         ai->ai_canonname= strdup(addr->ai_canonname);
     return ai;
+}
+
+DNSResolver::DnsResultType DNSResolver::__get_dns_cache(struct RequestItem* request)
+{
+    if(!dns_cache_time_)
+        return DnsResultType();
+    DnsCache::iterator it = dns_cache_->find(request->cache_key()); 
+    if(it == dns_cache_->end())
+        return DnsResultType();
+    if(it->second->update_time_ + dns_cache_time_ < time(NULL))
+    {
+        dns_cache_->erase(it);
+        return DnsResultType();
+    }
+    return it->second;
+}
+
+void DNSResolver::__set_dns_cache(struct RequestItem* request, DNSResolver::DnsResultType result)
+{
+    if(dns_cache_time_ > 0)
+    {
+        (*dns_cache_)[request->cache_key()] = result;
+    }
 }
 
 void DNSResolver::__internal_callback(int errcode, struct evutil_addrinfo *addr, void *contex)
@@ -53,6 +80,7 @@ void DNSResolver::__internal_callback(int errcode, struct evutil_addrinfo *addr,
     }
     evutil_freeaddrinfo(addr);
     DnsResultType dns_result(new ResultItem("", dns_ret, user_contex));
+    __set_dns_cache(request, dns_result);
     request->callback_(dns_result); 
     delete request;
 }
@@ -74,14 +102,43 @@ int DNSResolver::Open(std::string filename)
     return 0;
 }
 
-void DNSResolver::Resolve(const std::string& host, uint16_t port,
-        ResolverCallback cb, const void* contex)
+void DNSResolver::Close()
 {
-    printf("put %s\n", host.c_str());
+    if(closed_)
+        return;
+    event_base_loopexit(base_, NULL);
+    evdns_base_free(dnsbase_, 0);
+    dnsbase_ = NULL;
+    event_base_free(base_);
+    base_ = NULL; 
+    pthread_join(pid_, NULL);
+    closed_ = true;
+    if(dns_cache_)
+    {
+        delete dns_cache_;
+        dns_cache_ = NULL;
+    }
+}
+
+DNSResolver::DnsReqKey DNSResolver::Resolve(const std::string& host, uint16_t port, ResolverCallback cb, const void* contex)
+{
+    //printf("put %s\n", host.c_str());
+    RequestItem* request = new RequestItem(host, port, cb, contex);
+    DnsResultType ret = __get_dns_cache(request);
+    if(ret)
+    {
+        delete request;
+        cb(ret);
+        return NULL; 
+    }
+    //struct evdns_getaddrinfo_request *req = 
     char port_str[10];
     snprintf(port_str, 10, "%hu", port);
-    RequestItem* request = new RequestItem(cb, contex);
-    //struct evdns_getaddrinfo_request *req = 
-    evdns_getaddrinfo(dnsbase_, host.c_str(), port_str, &hints_, 
-            DNSResolver::__internal_callback, request);
+    return evdns_getaddrinfo(dnsbase_, host.c_str(), port_str, 
+        &hints_, DNSResolver::__internal_callback, request);
+}
+
+void DNSResolver::Cancel(DNSResolver::DnsReqKey req_key)
+{
+    evdns_getaddrinfo_cancel(req_key);
 }

@@ -1,6 +1,6 @@
 include $(top_srcdir)/common.mk
 
-AM_CPPFLAGS=-I$(libev_path)/include -I$(boost_path)/include
+AM_CPPFLAGS=-I$(libev_path)/include -I$(boost_path)/include -I$(top_srcdir)
 AM_LDFLAGS=-rdynamic -lpthread -lrt
 
 LDADD=$(libev_path)/lib/libevent.a
