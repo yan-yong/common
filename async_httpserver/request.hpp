@@ -14,8 +14,10 @@
 #include <string>
 #include <vector>
 #include <boost/algorithm/string/trim.hpp>
+#include <boost/lexical_cast.hpp>
 #include <cctype>
 #include <algorithm>
+#include <boost/asio.hpp>
 #include "header.hpp"
 #include "httpparser/Http.hpp"
 
@@ -36,6 +38,9 @@ struct request
 
     /// Minor version number, usually 0 or 1.
     int http_version_minor;
+
+    /// version string
+    std::string http_version;
 
     /// The headers included with the request.
     std::vector<header> headers;
@@ -88,6 +93,27 @@ struct request
         }
 
         return -3;
+    }
+
+    std::vector<boost::asio::const_buffer> to_buffers()
+    {
+        static const char name_value_separator[] = { ':', ' ' };
+        static const char crlf[] = { '\r', '\n' };
+        std::vector<boost::asio::const_buffer> buffers;
+        buffers.push_back(boost::asio::buffer(method));
+        buffers.push_back(boost::asio::buffer(uri));
+        buffers.push_back(boost::asio::buffer(http_version));
+        for (std::size_t i = 0; i < headers.size(); ++i)
+        {
+            header& h = headers[i];
+            buffers.push_back(boost::asio::buffer(h.name));
+            buffers.push_back(boost::asio::buffer(name_value_separator));
+            buffers.push_back(boost::asio::buffer(h.value));
+            buffers.push_back(boost::asio::buffer(crlf));
+        }
+        buffers.push_back(boost::asio::buffer(crlf));
+        buffers.push_back(boost::asio::buffer(content));
+        return buffers;
     }
 };
 

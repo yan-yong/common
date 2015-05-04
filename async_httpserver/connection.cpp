@@ -71,42 +71,48 @@ void connection::__write_tunnel_data_handler(bool is_peer,
     rd_sock->async_read_some(boost::asio::buffer(*rd_buffer), read_cb);
 }
 
-//http tunnel连接完成
-void connection::__tunnel_connect_handler(const err_code_t& ec)
+/// http tunnel连接完成
+void connection::__tunnel_connect_handler(bool second_tunnel, const err_code_t& ec)
 {
     if(closed_)
         return;
     serv_->handle_conn_update(shared_from_this());
-    if(ec)
-        errno_ = ec;
     http_reply_.reset(new reply());
     if(ec)
     {
-        LOG_ERROR("http tunnel connect %s error: %s\n", 
-            tunnel_addr().c_str(), error_msg().c_str());
+        errno_ = ec;
+        LOG_ERROR("http tunnel connect %s error: %s for %s\n", 
+            tunnel_addr().c_str(), error_msg().c_str(), peer_addr().c_str());
         *http_reply_ = reply::stock_reply(reply::service_unavailable);
+        boost::asio::async_write(*peer_socket_, http_reply_->to_buffers(), 
+            boost::bind(&connection::__write_tunnel_data_handler, shared_from_this(), true, _1, _2) );
+        return;
     }
-    else
+    if(!second_tunnel)
     {
-        LOG_DEBUG("http tunnel %s establish success\n", tunnel_addr().c_str());
+        LOG_DEBUG("http tunnel %s establish success for %s\n", tunnel_addr().c_str(), peer_addr().c_str());
         http_reply_->status = reply::establish_ok;
+        boost::asio::async_write(*peer_socket_, http_reply_->to_buffers(), 
+            boost::bind(&connection::__write_tunnel_data_handler, shared_from_this(), true, _1, _2) );
+        return;
     }
-    boost::asio::async_write(*peer_socket_, http_reply_->to_buffers(), 
-         boost::bind(&connection::__write_tunnel_data_handler, shared_from_this(), true, _1, _2) );
-    return;
+    LOG_DEBUG("http tunnel connect success to proxy %s for %s\n", tunnel_addr().c_str(), peer_addr().c_str());
+    // 二级代理则直接转发请求
+    boost::asio::async_write(*peer_socket_, http_request_->to_buffers(), 
+        boost::bind(&connection::__write_tunnel_data_handler, shared_from_this(), false, _1, _2) );
 }
 
 void connection::tunnel_connect(sock_ptr_t tunnel_socket, 
-    const boost::asio::ip::address& addr, uint16_t port)
+    const boost::asio::ip::address& addr, uint16_t port, bool second_tunnel)
 {
     boost::asio::ip::tcp::endpoint end_point(addr, port);
     tunnel_socket_ = tunnel_socket;
     tunnel_ip_  = addr.to_string();
     tunnel_port_= port;
-    LOG_DEBUG("try connecting to tunnel: %s %hu\n", 
-        tunnel_ip_.c_str(), tunnel_port_);
+    LOG_INFO("try connecting to tunnel: %s %hu for %s\n", 
+        tunnel_ip_.c_str(), tunnel_port_, peer_addr().c_str());
     tunnel_socket_->async_connect(end_point, 
-        boost::bind(&connection::__tunnel_connect_handler, shared_from_this(), _1));
+        boost::bind(&connection::__tunnel_connect_handler, shared_from_this(), second_tunnel, _1));
 }
 
 
@@ -273,6 +279,7 @@ connection::connection(sock_ptr_t sock, HttpServer* serv,
 connection::~connection()
 {
     close();
+    fprintf(stderr, "destroy ...\n");
 }
 
 }

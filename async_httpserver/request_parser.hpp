@@ -47,6 +47,7 @@ public:
 private:
   /// The name of the content length header.
   static std::string content_length_name_;
+  static std::string host_name_;
 
   /// Content length as decoded from headers. Defaults to 0.
   std::size_t content_length_;

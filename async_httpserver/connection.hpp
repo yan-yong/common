@@ -56,7 +56,7 @@ private:
 
     void __write_tunnel_data_handler(bool is_peer, const err_code_t& ec, std::size_t bytes_transferred);
 
-    void __tunnel_connect_handler(const err_code_t& ec);
+    void __tunnel_connect_handler(bool second_tunnel, const err_code_t& ec);
 
     void __read_http_data_handler(const err_code_t& ec, std::size_t bytes_transferred);
 
@@ -67,8 +67,6 @@ private:
 public:
     connection(sock_ptr_t sock, HttpServer* serv, 
         bool keep_alive = 0, void* context = NULL);
-
-    connection(){}
 
     ~connection();
     
@@ -84,7 +82,7 @@ public:
 
     void write_http_service_unavailable();
 
-    void tunnel_connect(sock_ptr_t, const boost::asio::ip::address& addr, uint16_t port);
+    void tunnel_connect(sock_ptr_t, const boost::asio::ip::address& addr, uint16_t port, bool second_tunnel = false);
 
     void handle_timeout();
 

@@ -30,6 +30,7 @@ boost::tribool request_parser::consume(request& req, char c)
     req.uri.clear();
     req.http_version_major = 0;
     req.http_version_minor = 0;
+    req.http_version.clear();
     req.headers.clear();
     req.content.clear();
     content_length_ = 0;
@@ -61,16 +62,21 @@ boost::tribool request_parser::consume(request& req, char c)
 
     // HTTP protocol identifier.
     if (c != 'H') return false;
+    req.http_version.push_back(c);
     yield return boost::indeterminate;
     if (c != 'T') return false;
+    req.http_version.push_back(c);
     yield return boost::indeterminate;
     if (c != 'T') return false;
+    req.http_version.push_back(c);
     yield return boost::indeterminate;
     if (c != 'P') return false;
+    req.http_version.push_back(c);
     yield return boost::indeterminate;
 
     // Slash.
     if (c != '/') return false;
+    req.http_version.push_back(c);
     yield return boost::indeterminate;
 
     // Major version number.
@@ -78,11 +84,13 @@ boost::tribool request_parser::consume(request& req, char c)
     while (is_digit(c))
     {
       req.http_version_major = req.http_version_major * 10 + c - '0';
+      req.http_version.push_back(c);
       yield return boost::indeterminate;
     }
 
     // Dot.
     if (c != '.') return false;
+    req.http_version.push_back(c);
     yield return boost::indeterminate;
 
     // Minor version number.
@@ -90,6 +98,7 @@ boost::tribool request_parser::consume(request& req, char c)
     while (is_digit(c))
     {
       req.http_version_minor = req.http_version_minor * 10 + c - '0';
+      req.http_version.push_back(c);
       yield return boost::indeterminate;
     }
 
