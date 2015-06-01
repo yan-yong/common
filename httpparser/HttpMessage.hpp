@@ -35,15 +35,15 @@ public:
 		m_Headers.push_back(header);
 	}
 
-        void Set(const std::string& name, const std::string& value)
-        {
-            int index = Find(name);
-            if(index < 0)
-                Add(name, value);
-            else
-                m_Headers[index].Value = value;
+    void Set(const std::string& name, const std::string& value)
+    {
+        int index = Find(name);
+        if(index < 0)
+            Add(name, value);
+        else
+            m_Headers[index].Value = value;
 
-        }
+    }
 
 	bool Remove(size_t index)
 	{
@@ -54,6 +54,11 @@ public:
 		}
 		return false;
 	}
+
+    MessageHeader& Back()
+    {
+        return m_Headers.back();
+    }
 
 	size_t Size() const
 	{
@@ -137,6 +142,18 @@ public:
 		value = m_Headers[i].Value;
 		return true;
 	}
+
+    std::vector<std::string> FindAllValue(const std::string& name) const
+    {
+        std::vector<std::string> val;
+        for(unsigned i = 0; i < m_Headers.size(); ++i)
+        {
+            if(m_Headers[i].Name == name)
+                val.push_back(m_Headers[i].Value);
+        }
+        return val;
+    }
+
 private:
 	std::vector<MessageHeader> m_Headers;
         friend std::ostream &operator<<(std::ostream&, const MessageHeaders&);

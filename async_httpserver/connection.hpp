@@ -78,9 +78,9 @@ public:
 
     void write_http_ok();
 
-    void write_http_bad_request();
+    void write_http_bad_request(const std::string & cont = std::string());
 
-    void write_http_service_unavailable();
+    void write_http_service_unavailable(const std::string & cont = std::string());
 
     void tunnel_connect(sock_ptr_t, const boost::asio::ip::address& addr, uint16_t port, bool second_tunnel = false);
 

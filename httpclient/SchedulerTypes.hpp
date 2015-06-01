@@ -126,8 +126,15 @@ inline const char* GetRedirectTypeName(REDIRECT_TYPE type)
   return "INVALID";
 }
 
-class ServChannel;
-class HostChannel;
+enum ConcurencyMode
+{
+    //该serv抓取时，不允许并发，一个抓完才抓下一个
+    NO_CONCURENCY,
+    //如果该serv有多个ip时，允许对不同ip间并发抓取
+    CONCURENCY_PER_SERV, 
+    //对并发没有限制
+    CONCURENCY_NO_LIMIT
+};
 
 struct BatchConfig
 {
@@ -136,7 +143,7 @@ struct BatchConfig
     static const unsigned DEFAULT_MAX_REDIRECT_TIMES = 4;
     static const unsigned DEFAULT_MAX_BODY_SIZE      = UINT_MAX;
     static const unsigned DEFAULT_TRUNCATE_SIZE      = UINT_MAX;
-    static const ResourcePriority DEFAULT_RES_PRIOR  = RES_PRIORITY_LEVEL_5; 
+    static const ResourcePriority DEFAULT_RES_PRIOR  = RES_PRIORITY_LEVEL_5;
     static const char* DEFAULT_USER_AGENT;
     static const char* DEFAULT_BATCH_ID;
     static const char* DEFAULT_ACCEPT_LANGUAGE;
@@ -176,78 +183,6 @@ struct BatchConfig
     {
         memcpy(this, &other, sizeof(other));
     }
-};
-
-struct Resource 
-{
-private:
-    ~Resource();
-
-public:
-    enum ProxyState
-    {
-        NO_PROXY,
-        PROXY_HTTP, 
-        PROXY_CONNECT,
-        PROXY_HTTPS
-    };
-
-public:
-    void Initialize(HostChannel* host_channel,
-        const std::string& suffix, ResourcePriority prior, 
-        void* contex, const MessageHeaders * user_headers,
-        const char* post_content, Resource* parent_res, 
-        BatchConfig *cfg);
-    std::string GetHostWithPort(bool with_port = false) const;
-    void SetProxyServ(ServChannel* serv_channel);
-    void Destroy();
-    std::string GetUrl() const;
-    URI GetURI() const;
-    int GetScheme() const;
-    uint16_t GetPort() const;
-    bool ExceedMaxRetryNum() const;
-    time_t GetTimeoutStamp() const;
-    bool ReachMaxRedirectNum() const;
-    Resource* RootResource();
-    std::string RootUrl();
-    unsigned RedirectCount() const;
-    const MessageHeaders* GetUserHeaders() const;
-    const char* GetPostContent() const;
-    std::string GetHttpMethod() const;
-    std::string GetHttpVersion() const;
-
-public:
-    //是否有自定义头
-    char has_user_headers_:     1;
-    //是否是重定向Resource
-    char is_redirect_:          1;
-    char has_post_content_:     1;
-    //引用当前Resource的重定向Resource数目
-    char root_ref_:             5;
-    unsigned cur_retry_times_;
-    ProxyState proxy_state_;
-    ResourcePriority   prior_;
-    linked_list_node_t queue_node_;
-    linked_list_node_t timed_lst_node_;
-    HostChannel *      host_;
-    //resource所属的serv
-    ServChannel *      serv_;
-    Connection  *      conn_;
-    char*              suffix_;
-    time_t             arrive_time_;
-    void*              contex_;
-    BatchConfig *      cfg_;
-    void*              extend_[0]; 
-};
-
-typedef linked_list_map<time_t, Resource, &Resource::timed_lst_node_> ResTimedMap;
-
-struct ResExtend
-{
-    const MessageHeaders* user_headers_;
-    const char*     post_content_;
-    Resource*       root_res_;
-    unsigned        cur_redirect_times_;
 };
 
 class FetchErrorType

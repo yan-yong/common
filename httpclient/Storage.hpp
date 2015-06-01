@@ -80,13 +80,12 @@ public:
     void SetHostSpeed(const std::string& host, unsigned fetch_interval_ms);
     void CheckCacheLimit();
     HostChannel* AcquireHostChannel(const URI& uri);
-
     BatchConfig* AcquireBatchCfg(const std::string&, const BatchConfig&);
 
     ServChannel* AcquireServChannel(
         char   scheme,
         struct addrinfo* ai,
-        ServChannel::ConcurencyMode concurency_mode, 
+        ConcurencyMode concurency_mode, 
         double max_err_rate, unsigned max_err_count,
         unsigned err_delay_sec, struct sockaddr* local_addr);
 
@@ -96,7 +95,7 @@ public:
             BatchConfig* batch_cfg, 
             ResourcePriority prior,
             const MessageHeaders* user_headers,
-            const char* post_content,
+            const std::vector<char>* post_content,
             Resource* root_res,
             ServChannel* proxy_serv);
     

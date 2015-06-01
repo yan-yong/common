@@ -54,13 +54,13 @@ protected:
     }
 
 protected:
-    void CheckAddCache(ServChannel* serv_channel);
-    void CheckAddCache(HostChannel* host_channel);
-    void CheckRemoveCache(ServChannel* serv_channel);
-    void CheckRemoveCache(HostChannel* host_channel);
-    void CheckServReady(ServChannel * serv_channel);
-    Resource* PopResource(ServChannel* serv_channel);
-    void PopAvailableResources(ServChannel*, 
+    void check_add_cache(ServChannel* serv_channel);
+    void check_add_cache(HostChannel* host_channel);
+    void check_remove_cache(ServChannel* serv_channel);
+    void check_remove_cache(HostChannel* host_channel);
+    void check_serv_ready(ServChannel * serv_channel);
+    Resource* pop_resource(ServChannel* serv_channel);
+    void pop_available_resources(ServChannel*, 
         std::vector<Resource*>&, unsigned max_count);
 
 public:
@@ -75,7 +75,7 @@ public:
     ServChannel* CreateServChannel(
         char scheme, struct addrinfo* ai, 
         ServChannel::ServKey serv_key, 
-        ServChannel::ConcurencyMode concurency_mode, 
+        ConcurencyMode concurency_mode, 
         unsigned max_err_rate, unsigned max_err_count,
         unsigned err_delay_sec, struct sockaddr* local_addr);
     HostChannel* CreateHostChannel(
@@ -89,6 +89,7 @@ public:
     void SetFetchIntervalMs(HostChannel*, unsigned);
     bool CheckResolveDns(HostChannel*, time_t, time_t);
     std::string ToString(HostChannel* host_channel) const;
+    std::string ToString(ServChannel* serv_channel) const;
     ResourceList RemoveUnfinishRes(ServChannel* serv_channel);
     ResourceList RemoveUnfinishRes(HostChannel* host_channel);
     std::vector<HostChannel*> PopHostCache(unsigned cnt);

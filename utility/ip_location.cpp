@@ -53,16 +53,18 @@ void IpLocation::initialize(const char* file_name)
     assert(addr_map_.size() > 0);
 }
 
-// > 0: 国内运营商IP
-// < 0: 国外运营商IP
+// >  0: 国内运营商IP
+// == 0: 国外运营商IP
+// <  0: 非法IP 
 int IpLocation::location(const char* ip)
 {
     uint32_t ip_val = __ip_to_int(ip);
+    if(ip_val == 0)
+        return -1;
     addr_map_t::iterator it = addr_map_.upper_bound(ip_val);
     --it;
     addr_val_t addr_val = it->second;
     if(ip_val <= addr_val.first)
         return addr_val.second;
-    return -1;
+    return 0;
 }
-

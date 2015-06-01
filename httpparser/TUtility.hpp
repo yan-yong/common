@@ -49,32 +49,6 @@ class UnChangable
         void operator = (const UnChangable &v);
 };
 
-template<class T, int count>
-class StasticCount 
-{
-    T sum_;
-    T val_array[count];
-    unsigned idx_;
-public:
-    StasticCount(): sum_(T()), idx_(0)
-    {
-        assert(count > 0);
-        for(int i = 0; i < count; i++)
-            val_array[i] = T();
-    }
-    void Add(T val)
-    {
-        idx_ = idx_++ % count;
-        sum_ -= val_array[idx_]; 
-        val_array[idx_] = val;
-        sum_ += val;
-    }
-    T Average() const
-    {
-        return sum_ / count; 
-    }
-}; 
-
 void PageDigestToHex(const char page_digest[PAGE_DIGEST_LEN], std::string& result);
 void BinarayToHex(const char *pointer, size_t length, std::string& result);
 std::string md5_hex(const std::string& str);

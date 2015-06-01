@@ -15,6 +15,7 @@
 #include <vector>
 #include <boost/asio.hpp>
 #include "header.hpp"
+#include "httpparser/HttpMessage.hpp"
 
 namespace http {
 namespace server4 {
@@ -45,7 +46,7 @@ struct reply
     } status;
 
     /// The headers to be included in the reply.
-    std::vector<header> headers;
+    MessageHeaders headers;
 
     /// The content to be sent in the reply.
     std::string content;

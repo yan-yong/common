@@ -18,58 +18,22 @@
 #include "dnsresolver/DNSResolver.hpp"
 #include "TRedirectChecker.hpp"
 
+class FetchRequest;
+
 class HttpClient: protected IMessageEvents
 {
 public:
-    struct FetchRequest
-    {
-        URI uri_;
-        void* contex_;
-        MessageHeaders* user_headers_;
-        char* content_;
-        ResourcePriority prior_;
-        BatchConfig * batch_cfg_;
-        struct addrinfo * proxy_ai_;
-        Resource*         root_res_;
-
-        FetchRequest()
-        {
-            memset(&contex_, 0, sizeof(struct FetchRequest) - sizeof(URI));
-        }
-
-        FetchRequest(
-            const URI& uri,
-            void*  contex,
-            MessageHeaders* user_headers,
-            char* content,
-            ResourcePriority prior,
-            BatchConfig* batch_cfg,
-            struct addrinfo * proxy_ai):
-        uri_(uri), contex_(contex),
-        user_headers_(user_headers),
-        content_(content), prior_(prior), 
-        batch_cfg_(batch_cfg), proxy_ai_(proxy_ai)
-        {
-            root_res_ = NULL;
-        }
-        
-        FetchRequest(const URI& uri, Resource* root_res)
-        {
-            memset(&contex_, 0, sizeof(struct FetchRequest) - sizeof(URI));
-            uri_ = uri;
-            root_res_ = root_res;    
-        }
-    };
-
     struct FetchResult 
     {
         FetchErrorType  error_;
         HttpFetcherResponse*  resp_;
         void* contex_;
+        time_t resp_cost_ms_;
 
         FetchResult(FetchErrorType error, 
             HttpFetcherResponse *resp, void* contex): 
-            error_(error), resp_(resp), contex_(contex)
+            error_(error), resp_(resp), contex_(contex),
+            resp_cost_ms_(86400000)
         {}
         ~FetchResult()
         {
@@ -128,23 +92,29 @@ public:
         size_t max_req_size    = DEFAULT_REQUEST_SIZE,
         size_t max_result_size = DEFAULT_RESULT_SIZE,
         const char* eth_name   = NULL);
+
     virtual bool PutRequest(
        const std::string& url,
        void*  contex = NULL,
        MessageHeaders* user_headers = NULL,
-       char* content = NULL,
-       ResourcePriority prior = BatchConfig::DEFAULT_RES_PRIOR,
-       std::string batch_id   = BatchConfig::DEFAULT_BATCH_ID, 
-       struct addrinfo * proxy_ai   = NULL);
-    //virtual bool PutRequest(Resource* res);
+       const std::vector<char>* content = NULL,
+       BatchConfig* batch_cfg = NULL, 
+       struct addrinfo* proxy_ai = NULL,
+       ResourcePriority prior = RES_PRIORITY_NOUSE);
+
+    bool GetResult(ResultPtr& result);
+
     virtual void Open();
+
     virtual void Close();
-    void SetResultCallback(ResultCallback call_cb);
-    void SetDefaultServConfig(ServChannel::ConcurencyMode, 
-        double, unsigned, unsigned);
-    void SetDefaultBatchConfig(const BatchConfig& batch_cfg);
+
     void SetFetcherParams(Fetcher::Params params);
+    void SetResultCallback(ResultCallback call_cb);
+    void SetServConfig(ConcurencyMode, double, unsigned, unsigned);
+    void SetDefaultBatchConfig(const BatchConfig& batch_cfg);
     void SetDnsCacheTime(time_t dns_update_time, time_t dns_error_time);
+    BatchConfig* AcquireBatchCfg(const std::string& batch_id, const BatchConfig& batch_cfg);
+    void UpdateBatchConfig(std::string batch_id, const BatchConfig& batch_cfg);
 
 private:
     boost::shared_ptr<ThreadingFetcher> fetcher_;
@@ -170,7 +140,7 @@ private:
     SpinLock wait_lst_lock_;
 
     //serv配置
-    ServChannel::ConcurencyMode serv_concurency_mode_;
+    ConcurencyMode serv_concurency_mode_;
     double   serv_max_err_rate_;
     unsigned serv_err_delay_sec_;
     unsigned serv_max_err_count_;
@@ -179,7 +149,7 @@ private:
     Fetcher::Params fetcher_params_;
 
     //默认Batch配置
-    BatchConfig default_batch_cfg_;
+    BatchConfig* default_batch_cfg_;
     
     //dns配置
     time_t   dns_update_time_;

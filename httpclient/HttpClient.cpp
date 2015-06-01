@@ -8,6 +8,42 @@
 
 typedef Storage::HostKey HostKey;
 
+struct FetchRequest
+{
+    URI uri_;
+    void* contex_;
+    MessageHeaders* user_headers_;
+    const std::vector<char>* content_;
+    ResourcePriority prior_;
+    BatchConfig * batch_cfg_;
+    struct addrinfo * proxy_ai_;
+    Resource*         root_res_;
+    time_t            fetch_time_;
+
+    FetchRequest(
+            const URI& uri,
+            void*  contex,
+            MessageHeaders* user_headers,
+            const std::vector<char>* content,
+            ResourcePriority prior,
+            BatchConfig* batch_cfg,
+            struct addrinfo * proxy_ai):
+        uri_(uri), contex_(contex), 
+        user_headers_(user_headers),
+        content_(content), prior_(prior), 
+        batch_cfg_(batch_cfg), proxy_ai_(proxy_ai)
+    {
+        root_res_ = NULL;
+    }
+
+    FetchRequest(const URI& uri, Resource* root_res)
+    {
+        memset(&contex_, 0, sizeof(struct FetchRequest) - sizeof(URI));
+        uri_ = uri;
+        root_res_ = root_res;    
+    }
+};
+
 static FETCH_FAIL_GROUP __srv_error_group(int error) 
 {
     assert(error);
@@ -42,6 +78,13 @@ HttpClient::HttpClient(
         assert(getifaddr(AF_INET, 0, eth_name, p_addr) == 0);
     }
     memset(&fetcher_params_, 0, sizeof(fetcher_params_));
+    BatchConfig batch_cfg;
+    default_batch_cfg_ = Storage::Instance()->AcquireBatchCfg(BatchConfig::DEFAULT_BATCH_ID, batch_cfg);
+}
+
+BatchConfig* HttpClient::AcquireBatchCfg(const std::string& batch_id, const BatchConfig& batch_cfg)
+{
+    return Storage::Instance()->AcquireBatchCfg(batch_id, batch_cfg);
 }
 
 void HttpClient::Open()
@@ -50,8 +93,8 @@ void HttpClient::Open()
     fetcher_->Begin(fetcher_params_);
 }
 
-void HttpClient::SetDefaultServConfig(
-    ServChannel::ConcurencyMode mode, 
+void HttpClient::SetServConfig(
+    ConcurencyMode mode, 
     double max_err_rate, unsigned err_delay_sec, 
     unsigned serv_max_err_count)
 {
@@ -69,7 +112,13 @@ void HttpClient::SetDnsCacheTime(time_t dns_update_time, time_t dns_error_time)
 
 void HttpClient::SetDefaultBatchConfig(const BatchConfig& batch_cfg)
 {
-    memcpy(&default_batch_cfg_, &batch_cfg, sizeof(BatchConfig));
+    std::string default_batch_id = BatchConfig::DEFAULT_BATCH_ID;
+    Storage::Instance()->UpdateBatchConfig(default_batch_id, batch_cfg);
+}
+
+void HttpClient::UpdateBatchConfig(std::string batch_id, const BatchConfig& batch_cfg)
+{
+    Storage::Instance()->UpdateBatchConfig(batch_id, batch_cfg);
 }
 
 void HttpClient::SetFetcherParams(Fetcher::Params params)
@@ -126,18 +175,30 @@ void HttpClient::ProcessFailResult(FetchErrorType fetch_error,
     Resource* res, HttpFetcherResponse* message)
 {
     __sync_fetch_and_sub(&cur_req_size_, 1);
-    LOG_ERROR("%s, ERROR, %s\n", res->GetUrl().c_str(), 
+    LOG_ERROR("%s, FAILED, %s\n", res->GetUrl().c_str(), 
         GetSpiderError(fetch_error).c_str());
+    PutResult(fetch_error, message, res->contex_);
+    Storage::Instance()->DestroyResource(res);
+    // 检查是否Server错误
     if(res->serv_ && fetch_error.group() == FETCH_FAIL_GROUP_SERVER)
     {
         res->serv_->AddFail();
         if(res->serv_->IsServErr())
         {
-            //TODO: add serv error operation
+            LOG_ERROR("%s: server ERROR\n", channel_manager_->ToString(res->serv_).c_str());
+            ResourceList res_lst = channel_manager_->RemoveUnfinishRes(res->host_);
+            while(!res_lst.empty())
+            {
+                Resource * res = res_lst.get_front();
+                res_lst.pop_front();
+                timed_lst_map_.del(*res);
+                PutResult(fetch_error, NULL, res->contex_);
+                Storage::Instance()->DestroyResource(res);
+            }
+            // 删除这个serv
+            channel_manager_->DestroyChannel(res->serv_);
         }
     }
-    PutResult(fetch_error, message, res->contex_);
-    Storage::Instance()->DestroyResource(res);
 }
 
 void HttpClient::PutDnsResult(DnsResultType dns_result)
@@ -164,8 +225,7 @@ void HttpClient::HandleDnsResult(DnsResultType dns_result)
             host_channel->scheme_, ai, 
             serv_concurency_mode_, serv_max_err_rate_,
             serv_max_err_count_,   serv_err_delay_sec_,
-            local_addr_ 
-        );
+            local_addr_ );
         channel_manager_->SetServChannel(host_channel, serv_channel);
         return;
     }
@@ -294,8 +354,9 @@ void HttpClient::HandleRequest(RequestPtr request)
     //重定向的request
     if(request->root_res_)
     {
+        // 如果root resource使用了代理，则使用该代理
         if(request->root_res_->proxy_state_ != Resource::NO_PROXY)
-            proxy_serv = res->serv_;
+            proxy_serv = request->root_res_->serv_;
         res = Storage::Instance()->CreateResource(
             request->uri_,  request->root_res_->contex_, 
             request->root_res_->cfg_, request->prior_,
@@ -321,6 +382,7 @@ void HttpClient::HandleRequest(RequestPtr request)
 
     __sync_fetch_and_add(&cur_req_size_, 1);
     HostChannel * host_channel = res->host_;
+    // 不使用代理时，去检查解dns
     if(proxy_serv == NULL)
     {
         if(channel_manager_->CheckResolveDns(host_channel, 
@@ -330,7 +392,7 @@ void HttpClient::HandleRequest(RequestPtr request)
             DNSResolver::ResolverCallback dns_resolver_cb = 
                 boost::bind(&HttpClient::PutDnsResult, this, _1);
             dns_resolver_->Resolve(host_channel->host_, host_channel->port_, 
-                    dns_resolver_cb, host_key);
+                dns_resolver_cb, host_key);
             LOG_INFO("%s, request DNS\n", host_channel->host_.c_str()); 
         }
         else if(host_channel->host_error_)
@@ -338,7 +400,7 @@ void HttpClient::HandleRequest(RequestPtr request)
             FetchErrorType host_err(FETCH_FAIL_GROUP_DNS, RS_DNS_SUBMIT_FAIL);
             ProcessFailResult(host_err, res, NULL);
             return;
-        } 
+        }
     }
 
     //加入到超时队列中, 0表示不超时
@@ -351,10 +413,10 @@ bool HttpClient::PutRequest(
     const  std::string& url,
     void*  contex,
     MessageHeaders* user_headers,
-    char* content,
-    ResourcePriority prior,
-    std::string batch_id,
-    struct addrinfo * proxy_ai)
+    const std::vector<char>* content,
+    BatchConfig * batch_cfg,
+    struct addrinfo * proxy_ai,
+    ResourcePriority prior)
 {
     if(cur_req_size_ > max_req_size_)
     {
@@ -369,8 +431,11 @@ bool HttpClient::PutRequest(
         LOG_ERROR("%s, invalid uri\n", url.c_str());
         return false;
     }
-    BatchConfig * batch_cfg = Storage::Instance()->AcquireBatchCfg(
-            batch_id, default_batch_cfg_);
+    if(!batch_cfg)
+        batch_cfg = default_batch_cfg_;
+    //如果不指定Resource优先级，则使用批次的优先级
+    if(prior == RES_PRIORITY_NOUSE)
+        prior = batch_cfg->prior_;
     request_queue_.enqueue(new FetchRequest(uri, contex, 
         user_headers, content, prior, batch_cfg, proxy_ai));
     return true;
@@ -388,6 +453,7 @@ void HttpClient::__fetch_resource(Resource* p_res)
     assert(p_res);
     //进入内核后不再控制超时，从超时队列中删除
     timed_lst_map_.del(*p_res);
+    p_res->fetch_time_ = current_time_ms();
     p_res->cur_retry_times_++;
     RawFetcherRequest request;
     request.conn = p_res->conn_;
@@ -454,13 +520,13 @@ struct RequestData* HttpClient::CreateRequestData(void * request_context)
         // add post content
         if(res->GetPostContent())
         {
-            const char* post_content = res->GetPostContent();
-            size_t content_len       = strlen(post_content);
+            const std::vector<char>* post_content = res->GetPostContent();
+            size_t content_len = post_content->size();
             char content_len_str[16];
             snprintf(content_len_str, 16, "%zd", content_len);
             req->Headers.Add("Content-Type", "application/x-www-form-urlencoded");
             req->Headers.Add("Content-Length", content_len_str);
-            req->Body.assign(post_content, post_content + content_len);
+            req->Body = *post_content;
         }
         // add user header
         const MessageHeaders* user_headers = res->GetUserHeaders();
@@ -597,6 +663,11 @@ void HttpClient::Pool()
     for(unsigned i = 0; i < res_vec.size(); i++)
         __fetch_resource(res_vec[i]);
     __handle_timeout_list();
+}
+
+bool HttpClient::GetResult(ResultPtr& result)
+{
+    return result_queue_.dequeue(result);
 }
 
 void HttpClient::SetResultCallback(ResultCallback call_cb)

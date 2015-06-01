@@ -20,6 +20,7 @@
 #include <boost/asio.hpp>
 #include "header.hpp"
 #include "httpparser/Http.hpp"
+#include "httpparser/HttpMessage.hpp"
 
 namespace http {
 namespace server4 {
@@ -43,34 +44,54 @@ struct request
     std::string http_version;
 
     /// The headers included with the request.
-    std::vector<header> headers;
+    //std::vector<header> headers;
+    MessageHeaders headers;
 
     /// The optional content sent with the request.
-    std::string content;
+    std::vector<char> content;
+
+    std::string get_path() const
+    {
+        size_t beg_idx = uri.find("://");
+        if(beg_idx == std::string::npos)
+            return uri;
+        beg_idx += strlen("://");
+        size_t end_idx = uri.find("/", beg_idx);
+        if(end_idx == std::string::npos || end_idx == uri.size() - 1)
+            return "/";
+        return uri.substr(end_idx);
+    }
+
+    std::string get_host() const
+    {
+        std::string host;
+        if(headers.FindValue("Host", host))
+            return host;
+        size_t beg_idx = uri.find("://");
+        if(beg_idx == std::string::npos)
+            return "";
+        beg_idx += strlen("://");
+        size_t end_idx = uri.find("/");
+        if(end_idx == std::string::npos)
+            return uri.substr(beg_idx);
+        return uri.substr(beg_idx, end_idx - beg_idx);
+    }
 
     std::vector<std::string> get_header(const std::string& header)
     {
-        std::vector<std::string> res;
         std::string header_name = header;
         boost::trim(header_name);
         transform(header_name.begin(), header_name.end(), header_name.begin(), tolower);
-        for(unsigned i = 0; i < headers.size(); i++){
-            std::string name = headers[i].name;
-            boost::trim(name);
-            transform(name.begin(), name.end(), name.begin(), tolower);
-            if(name == header_name)
-                res.push_back(headers[i].value);
-        }
-        return res;
+        return headers.FindAllValue(header_name);
     }
 
     int decompress()
     {
-        std::vector<std::string> hd_vec = get_header("Content-Encoding");
-        if(hd_vec.size() == 0)
+        std::string encoding;
+        if(!headers.FindValue("Content-Encoding", encoding))
             return 0;
 
-        if (hd_vec[0] == "gzip")
+        if (encoding == "gzip")
         {   
             std::vector<char> buffer;
             if (GzipUncompress(&content[0], content.size(), buffer) == 0) 
@@ -81,7 +102,7 @@ struct request
             return -1; 
         }
 
-        if(hd_vec[0] == "deflate")
+        if(encoding == "deflate")
         {    
             std::vector<char> buffer;
             if (DeflateUncompress(&content[0], content.size(), buffer) == 0)
@@ -103,12 +124,12 @@ struct request
         buffers.push_back(boost::asio::buffer(method));
         buffers.push_back(boost::asio::buffer(uri));
         buffers.push_back(boost::asio::buffer(http_version));
-        for (std::size_t i = 0; i < headers.size(); ++i)
+        for (std::size_t i = 0; i < headers.Size(); ++i)
         {
-            header& h = headers[i];
-            buffers.push_back(boost::asio::buffer(h.name));
+            MessageHeader& h = headers[i];
+            buffers.push_back(boost::asio::buffer(h.Name));
             buffers.push_back(boost::asio::buffer(name_value_separator));
-            buffers.push_back(boost::asio::buffer(h.value));
+            buffers.push_back(boost::asio::buffer(h.Value));
             buffers.push_back(boost::asio::buffer(crlf));
         }
         buffers.push_back(boost::asio::buffer(crlf));

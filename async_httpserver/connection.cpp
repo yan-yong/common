@@ -221,15 +221,19 @@ void connection::write_http_ok()
     __write_http_reply(http_reply_);
 }
 
-void connection::write_http_bad_request()
+void connection::write_http_bad_request(const std::string & cont)
 {
     http_reply_.reset(new reply(reply::stock_reply(reply::bad_request)));
+    if(!cont.empty())
+        http_reply_->content = cont;
     __write_http_reply(http_reply_);
 }
 
-void connection::write_http_service_unavailable()
+void connection::write_http_service_unavailable(const std::string & cont)
 {
     http_reply_.reset(new reply(reply::stock_reply(reply::service_unavailable)));
+    if(!cont.empty())
+        http_reply_->content = cont;
     __write_http_reply(http_reply_);
 }
 

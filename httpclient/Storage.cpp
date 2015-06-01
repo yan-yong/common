@@ -146,17 +146,14 @@ void Storage::UpdateBatchConfig(std::string& batch_id, const BatchConfig& cfg)
 
 ServChannel* Storage::AcquireServChannel(
         char   scheme, struct addrinfo* ai, 
-        ServChannel::ConcurencyMode concurency_mode, 
+        ConcurencyMode concurency_mode, 
         double max_err_rate, unsigned max_err_count,
         unsigned err_delay_sec, struct sockaddr* local_addr )
 {
     ServKey serv_key = __aigetkey(ai, scheme, local_addr); 
-    {
-        //ReadGuard guard(serv_map_lock_);
-        ServMap::iterator it = serv_map_.find(serv_key); 
-        if(it != serv_map_.end())
-            return it->second;
-    }
+    ServMap::iterator it = serv_map_.find(serv_key); 
+    if(it != serv_map_.end())
+        return it->second;
 
     //WriteGuard guard(serv_map_lock_);
     ServChannel* serv_channel = channel_manager_->CreateServChannel(
@@ -237,9 +234,8 @@ Resource* Storage::CreateResource(
         BatchConfig* batch_cfg,  
         ResourcePriority prior,
         const MessageHeaders* user_headers,
-        const char* post_content,
-        Resource* root_res,
-        ServChannel* proxy_serv)
+        const std::vector<char>* post_content,
+        Resource* root_res, ServChannel* proxy_serv)
 {
     if(close_)
         return NULL;

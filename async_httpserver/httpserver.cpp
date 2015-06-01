@@ -83,9 +83,9 @@ void HttpServer::http_request_finished(conn_ptr_t conn)
 void HttpServer::handle_normal_request(conn_ptr_t conn)
 {
     //如果设置了handler, 则使用该handler
-    if(received_handler_)
+    if(norm_http_handler_)
     {
-        received_handler_(conn);
+        norm_http_handler_(conn);
         return;
     }
     //default
@@ -95,6 +95,11 @@ void HttpServer::handle_normal_request(conn_ptr_t conn)
 // 接收到http connect请求
 void HttpServer::handle_tunnel_request(conn_ptr_t conn)
 {
+    if(tunnel_http_handler_)
+    {
+        tunnel_http_handler_(conn);
+        return;
+    }
     request_ptr_t p_req = conn->get_request();
     std::string host = p_req->uri;
     uint16_t    port = 443;
@@ -115,11 +120,18 @@ void HttpServer::fetch_dns_result(DNSResolver::DnsResultType dns_result)
     io_service_.post(boost::bind(&HttpServer::handle_dns_result, shared_from_this(), dns_result));
 }
 
+void HttpServer::tunnel_connect(conn_ptr_t conn, const std::string& addr_str, uint16_t port, bool second_tunnel)
+{
+    sock_ptr_t tunnel_socket(new boost::asio::ip::tcp::socket(io_service_));
+    conn->tunnel_connect(tunnel_socket, boost::asio::ip::address::from_string(addr_str), port, second_tunnel);
+}
+
 void HttpServer::handle_dns_result(DNSResolver::DnsResultType dns_result)
 {
     connection* raw_ptr = (connection*)dns_result->contex_;
     assert(raw_ptr);
     conn_ptr_t conn = ((conn_list_t*)conn_lst_)->entry(raw_ptr);
+    // connection 此时已经超时
     if(!conn)
         return;
     request_ptr_t p_req = conn->get_request();
@@ -134,24 +146,20 @@ void HttpServer::handle_dns_result(DNSResolver::DnsResultType dns_result)
     std::string addr_str;
     uint16_t port = 0;
     dns_result->GetAddr(addr_str, port);
-    sock_ptr_t tunnel_socket(new boost::asio::ip::tcp::socket(io_service_));
-    conn->tunnel_connect(tunnel_socket, boost::asio::ip::address::from_string(addr_str), port); 
+    tunnel_connect(conn, addr_str, port);
 }
 
 void HttpServer::handle_conn_update(conn_ptr_t conn)
 {
-    if(conn_timeout_sec_)
-    {
-        ((conn_list_t*)conn_lst_)->del(conn);
-        ((conn_list_t*)conn_lst_)->add_back(conn);
-    }
+
+    ((conn_list_t*)conn_lst_)->del(conn);
+    ((conn_list_t*)conn_lst_)->add_back(conn);
 }
 
 void HttpServer::remove_connection(conn_ptr_t conn)
 {
-    if(conn_timeout_sec_)
-        ((conn_list_t*)conn_lst_)->del(conn);
     conn->close();
+    ((conn_list_t*)conn_lst_)->del(conn);
 }
 
 void HttpServer::check_timeout()
@@ -229,4 +237,13 @@ void HttpServer::stop()
 void HttpServer::post(boost::function<void (void)> cb)
 {
     io_service_.post(cb);
+}
+
+void HttpServer::add_runtine(time_t interval_sec, boost::function< void (void)> runtine)
+{
+    if(interval_sec == 0)
+        return;
+    runtine();
+    boost::asio::deadline_timer t(io_service_, boost::posix_time::seconds(1));
+    t.async_wait(boost::bind(&HttpServer::add_runtine, shared_from_this(), interval_sec, runtine));
 }

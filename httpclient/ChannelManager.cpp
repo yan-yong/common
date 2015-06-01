@@ -41,7 +41,7 @@ Connection* ChannelManager::__acquire_connection(ServChannel* serv_channel)
 {
     Connection* conn = serv_channel->conn_storage_.front();
     serv_channel->conn_storage_.pop_front();
-    if(serv_channel->concurency_mode_ == ServChannel::CONCURENCY_NO_LIMIT)
+    if(serv_channel->concurency_mode_ == CONCURENCY_NO_LIMIT)
     {
         serv_channel->conn_storage_.push_back(conn);
         return ThreadingFetcher::CreateConnection(conn);
@@ -49,7 +49,7 @@ Connection* ChannelManager::__acquire_connection(ServChannel* serv_channel)
     return conn;
 }
 
-void ChannelManager::CheckAddCache(ServChannel* serv_channel)
+void ChannelManager::check_add_cache(ServChannel* serv_channel)
 {
     if(serv_channel && __empty(serv_channel) && 
         (serv_channel->cache_node_).empty())
@@ -60,7 +60,7 @@ void ChannelManager::CheckAddCache(ServChannel* serv_channel)
     }
 }
 
-void ChannelManager::CheckAddCache(HostChannel* host_channel)
+void ChannelManager::check_add_cache(HostChannel* host_channel)
 {
     if(__empty(host_channel) && host_channel->cache_node_.empty())
     {
@@ -70,7 +70,7 @@ void ChannelManager::CheckAddCache(HostChannel* host_channel)
     }
 }
 
-void ChannelManager::CheckRemoveCache(ServChannel* serv_channel)
+void ChannelManager::check_remove_cache(ServChannel* serv_channel)
 {
     if(serv_channel && !__empty(serv_channel) &&
         !serv_channel->cache_node_.empty())
@@ -81,7 +81,7 @@ void ChannelManager::CheckRemoveCache(ServChannel* serv_channel)
     }
 }
 
-void ChannelManager::CheckRemoveCache(HostChannel* host_channel)
+void ChannelManager::check_remove_cache(HostChannel* host_channel)
 {
     if(!__empty(host_channel) && !host_channel->cache_node_.empty())
     {
@@ -97,6 +97,7 @@ bool ChannelManager::WaitEmpty(ServChannel* serv_channel)
     return __wait_empty(serv_channel);
 }
 
+// HostChannel关联ServChannel的接口
 void ChannelManager::SetServChannel(HostChannel* host_channel, ServChannel * serv_channel)
 {
     ServChannel* last_serv = host_channel->serv_;
@@ -108,7 +109,7 @@ void ChannelManager::SetServChannel(HostChannel* host_channel, ServChannel * ser
             return;
         host_channel->dns_resolving_ = 0;
         HostChannelList::del(*host_channel);
-        CheckAddCache(last_serv);
+        check_add_cache(last_serv);
         host_channel->serv_ = serv_channel;
     }
     //** 处理新的serv 
@@ -130,10 +131,10 @@ void ChannelManager::SetServChannel(HostChannel* host_channel, ServChannel * ser
             serv_channel->fetch_interval_ms_ = host_channel->fetch_interval_ms_;
         }
         __update_serv_host_state(host_channel);
-        CheckRemoveCache(serv_channel);
+        check_remove_cache(serv_channel);
     }
     //** 检查serv是否ready
-    CheckServReady(serv_channel);
+    check_serv_ready(serv_channel);
 }
 
 void ChannelManager::DestroyChannel(HostChannel* host_channel)
@@ -152,21 +153,11 @@ void ChannelManager::DestroyChannel(HostChannel* host_channel)
 
 void ChannelManager::DestroyChannel(ServChannel* serv_channel)
 {
-    if(!(serv_channel->queue_node_).empty())
-    {
-        //SpinGuard ready_guard(serv_ready_lock_);
-        //SpinGuard serv_guard(serv_channel->lock_);
-        assert(__empty(serv_channel));
-        serv_ready_lst_map_.del(*serv_channel);
-    }
     //SpinGuard guard(serv_channel->lock_);
     assert(__empty(serv_channel));
+    serv_ready_lst_map_.del(*serv_channel);
     //remove from cache list
-    if(!serv_channel->cache_node_.empty())
-    {
-        //SpinGuard cache_guard(serv_cache_lock_);
-        ServCacheList::del(*serv_channel);
-    }
+    ServCacheList::del(*serv_channel);
     //erase connection
     while(!serv_channel->conn_storage_.empty())
     {
@@ -199,6 +190,8 @@ ResourceList ChannelManager::RemoveUnfinishRes(ServChannel* serv_channel)
         //SpinGuard guard(host_channel->lock_);
         ResourceList wait_lst = (host_channel->res_wait_queue_).splice();
         unfinish_lst.splice_front(wait_lst);
+        HostChannelList::del(*host_channel);
+        serv_channel->idle_host_lst_.add_back(*host_channel);
     }
     unfinish_lst.splice_front(serv_channel->fetching_lst_);
     if(serv_channel->pres_wait_queue_)
@@ -243,7 +236,7 @@ void ChannelManager::AddResource(Resource* res)
         //SpinGuard serv_guard(__serv_lock(serv_channel));
         //SpinGuard host_guard(host_channel->lock_);
         ++host_channel->ref_cnt_;
-        CheckRemoveCache(host_channel);
+        check_remove_cache(host_channel);
         //如果Resource指定了ServChannel，则res直接挂到ServChannel下
         if(res->serv_)
         {
@@ -261,10 +254,10 @@ void ChannelManager::AddResource(Resource* res)
                 __update_serv_host_state(host_channel);
         }
         if(serv_channel)
-            CheckRemoveCache(serv_channel);
+            check_remove_cache(serv_channel);
     }
     //** 检查serv是否ready
-    CheckServReady(serv_channel);
+    check_serv_ready(serv_channel);
 }
 
 //删除resource
@@ -281,15 +274,15 @@ void ChannelManager::RemoveResource(Resource* res)
                 (serv_channel->conn_storage_).push_back(res->conn_);
                 res->conn_ = NULL;
             }
-            CheckAddCache(serv_channel);
+            check_add_cache(serv_channel);
         }
         //SpinGuard host_guard(res->host_->lock_);
         --(res->host_->ref_cnt_);
-        CheckAddCache(res->host_); 
+        check_add_cache(res->host_); 
         res->host_ = NULL;
         res->serv_ = NULL;
     }
-    CheckServReady(serv_channel);
+    check_serv_ready(serv_channel);
 }
 
 std::vector<HostChannel*> ChannelManager::PopHostCache(unsigned cnt)
@@ -334,8 +327,14 @@ bool ChannelManager::CheckResolveDns(HostChannel* host_channel,
 {
     //SpinGuard host_guard(host_channel->lock_);
     time_t cur_time   = current_time_ms();
-    time_t cache_time = host_channel->host_error_ ? dns_error_time:dns_update_time;
-    if(host_channel->dns_resolving_ || cur_time < host_channel->update_time_ + cache_time)
+    // dns错误, 但是还未超过错误的缓存时间, 这时不应该再去尝试解dns
+    if(host_channel->host_error_ && cur_time < host_channel->update_time_ + dns_error_time)
+        return false;
+    // 正在解dns
+    if(host_channel->dns_resolving_)
+        return false;
+    // 有dns, 但还不到更新的时候
+    if(host_channel->serv_ && cur_time < host_channel->update_time_ + dns_update_time)
         return false;
     host_channel->dns_resolving_ = 1;
     host_channel->host_error_    = 0;
@@ -350,16 +349,16 @@ void ChannelManager::ReleaseConnection(Resource* res)
         //reset back to HTTPS
         if(res->proxy_state_ == Resource::PROXY_CONNECT)
             ThreadingFetcher::SetConnectionScheme(res->conn_, PROTOCOL_HTTPS);
-        if(res->serv_->concurency_mode_ != ServChannel::CONCURENCY_NO_LIMIT)
+        if(res->serv_->concurency_mode_ != CONCURENCY_NO_LIMIT)
             (res->serv_->conn_storage_).push_back(res->conn_);
         else
             ThreadingFetcher::FreeConnection(res->conn_);
         res->conn_ = NULL;
     }
-    CheckServReady(res->serv_);
+    check_serv_ready(res->serv_);
 }
 
-Resource* ChannelManager::PopResource(ServChannel* serv_channel)
+Resource* ChannelManager::pop_resource(ServChannel* serv_channel)
 {
     Resource* res = NULL;
     //如果pres_wait_queue_和HostChannel里都有Resource排队，
@@ -381,7 +380,7 @@ Resource* ChannelManager::PopResource(ServChannel* serv_channel)
     return res;
 }
 
-void ChannelManager::PopAvailableResources(
+void ChannelManager::pop_available_resources(
     ServChannel* serv_channel, std::vector<Resource*>& res_vec, 
     unsigned max_count)
 {
@@ -392,7 +391,7 @@ void ChannelManager::PopAvailableResources(
         && res_vec.size() < max_count)
     {
         time_t ready_time = serv_channel->GetReadyTime();
-        if(ready_time > cur_time)
+        if(ready_time >= cur_time)
         {
             serv_ready_lst_map_.add_back(ready_time, *serv_channel);
             if(min_ready_time_ > ready_time)
@@ -400,7 +399,7 @@ void ChannelManager::PopAvailableResources(
             break;
         }
         Connection* conn = __acquire_connection(serv_channel);
-        Resource*    res = PopResource(serv_channel);
+        Resource*    res = pop_resource(serv_channel);
         serv_channel->SetFetchTime(cur_time);
         res->conn_       = conn;
         // proxy connect时, 使用http协议
@@ -431,13 +430,13 @@ std::vector<Resource*> ChannelManager::PopAvailableResources(unsigned max_count)
         }
         //SpinGuard serv_guard(serv_channel->lock_);
         serv_ready_lst_map_.pop_front();
-        PopAvailableResources(serv_channel, res_vec, max_count);
+        pop_available_resources(serv_channel, res_vec, max_count);
     }
     return res_vec;
 }
 
 //注意： 这个函数不能被其它锁包围
-void ChannelManager::CheckServReady(ServChannel * serv_channel)
+void ChannelManager::check_serv_ready(ServChannel * serv_channel)
 {
     if(serv_channel && !__wait_empty(serv_channel) && 
         serv_channel->conn_storage_.size() && 
@@ -469,10 +468,30 @@ std::string ChannelManager::ToString(HostChannel* host_channel) const
     return buf;
 }
 
+std::string ChannelManager::ToString(ServChannel* serv_channel) const
+{
+    Connection* conn = NULL;
+    std::string str;
+    if(serv_channel->conn_storage_.size() > 0)
+        conn = *serv_channel->conn_storage_.begin();
+    else
+        conn = serv_channel->fetching_lst_.get_front()->conn_;
+    if(!conn)
+        return "0.0.0.0";
+    sockaddr* addr = NULL;
+    ThreadingFetcher::GetSockAddr(conn, addr);
+    char addr_str[20];
+    uint16_t port = 0;
+    get_addr_string(addr, addr_str, 10, port);
+    size_t addr_len = strlen(addr_str);
+    snprintf(addr_str + addr_len, 20 - addr_len, ":%hu", port);
+    return addr_str;
+}
+
 ServChannel* ChannelManager::CreateServChannel(
     char scheme, struct addrinfo* ai, 
     ServChannel::ServKey serv_key, 
-    ServChannel::ConcurencyMode concurency_mode,
+    ConcurencyMode concurency_mode,
     unsigned max_err_rate, unsigned max_err_count,
     unsigned err_delay_sec, struct sockaddr* local_addr)
 {

@@ -32,8 +32,8 @@ class HttpServer: public boost::enable_shared_from_this<HttpServer>
 {
 
 public:
-    typedef boost::function<void (conn_ptr_t)> ReceivedHandler;
-    typedef boost::function<void (conn_ptr_t)> WrittenHandler;
+    typedef boost::function<void (conn_ptr_t)> NormHttpHandler;
+    typedef boost::function<void (conn_ptr_t)> TunnelHttpHandler;
 
 private:
     time_t conn_timeout_sec_;
@@ -44,8 +44,8 @@ private:
 
     boost::asio::io_service io_service_;
     boost::asio::io_service::work io_work_;
-    ReceivedHandler received_handler_;
-    WrittenHandler  written_handler_;
+    NormHttpHandler    norm_http_handler_;
+    TunnelHttpHandler  tunnel_http_handler_;
     void* conn_lst_;
     DNSResolver dns_resolver_;
     bool stop_;
@@ -89,10 +89,19 @@ public:
 
     void post(boost::function<void (void)> cb);
 
-    void set_received_handler(ReceivedHandler handler)
+    void set_norm_http_handler(NormHttpHandler handler)
     {
-        received_handler_ = handler;
+        norm_http_handler_ = handler;
     }
+
+    void set_tunnel_http_handler(TunnelHttpHandler handler)
+    {
+        tunnel_http_handler_ = handler; 
+    }
+
+    void add_runtine(time_t interval_sec, boost::function< void (void)> runtine);
+
+    void tunnel_connect(conn_ptr_t conn, const std::string& addr_str, uint16_t port, bool second_tunnel = false);
 
     friend class http::server4::connection;
  };

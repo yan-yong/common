@@ -7,6 +7,9 @@
 #include "httpparser/TUtility.hpp"
 #include "lock/lock.hpp"
 #include "httpparser/HttpFetchProtocal.hpp"
+#include "Resource.hpp"
+#include "utility/stastic_count.h"
+
 /**
     由于HostChannel与ServChannel相互引用，
     确保加锁顺序：先加ServChannel锁，再加HostChannel锁
@@ -58,15 +61,6 @@ struct ServChannel
 {
     //正在抓取的resource
     typedef long long ServKey;
-    enum ConcurencyMode
-    {
-        //该serv抓取时，不允许并发，一个抓完才抓下一个
-        NO_CONCURENCY,
-        //如果该serv有多个ip时，允许对不同ip间并发抓取
-        CONCURENCY_PER_SERV, 
-        //对并发没有限制
-        CONCURENCY_NO_LIMIT
-    };
 
     static const double DEFAULT_MAX_ERR_RATE  = 0.8;
     static const ConcurencyMode DEFAULT_CONCURENCY_MODE = CONCURENCY_PER_SERV;
@@ -96,8 +90,8 @@ struct ServChannel
     unsigned fetch_interval_ms_;
     //连续失败的最大次数
     unsigned max_err_count_;
-    //该host允许的最大错误率 
-    double max_err_rate_;
+    //该serv允许的最大错误率 
+    double   max_err_rate_;
     //正在抓取的resource列表
     ResourceList fetching_lst_;
     ServKey serv_key_;

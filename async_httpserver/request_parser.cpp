@@ -31,7 +31,7 @@ boost::tribool request_parser::consume(request& req, char c)
     req.http_version_major = 0;
     req.http_version_minor = 0;
     req.http_version.clear();
-    req.headers.clear();
+    req.headers.Clear();
     req.content.clear();
     content_length_ = 0;
 
@@ -115,19 +115,19 @@ boost::tribool request_parser::consume(request& req, char c)
       if (c == ' ' || c == '\t')
       {
         // Leading whitespace. Must be continuation of previous header's value.
-        if (req.headers.empty()) return false;
+        if (req.headers.Empty()) return false;
         while (c == ' ' || c == '\t')
           yield return boost::indeterminate;
       }
       else
       {
         // Start the next header.
-        req.headers.push_back(header());
+        req.headers.Add(MessageHeader());
 
         // Header name.
         while (is_char(c) && !is_ctl(c) && !is_tspecial(c) && c != ':')
         {
-          req.headers.back().name.push_back(c);
+          req.headers.Back().Name.push_back(c);
           yield return boost::indeterminate;
         }
 
@@ -141,7 +141,7 @@ boost::tribool request_parser::consume(request& req, char c)
       // Header value.
       while (is_char(c) && !is_ctl(c) && c != '\r')
       {
-        req.headers.back().value.push_back(c);
+        req.headers.Back().Value.push_back(c);
         yield return boost::indeterminate;
       }
 
@@ -158,14 +158,14 @@ boost::tribool request_parser::consume(request& req, char c)
     if (c != '\n') return false;
 
     // Check for optional Content-Length header.
-    for (std::size_t i = 0; i < req.headers.size(); ++i)
+    for (std::size_t i = 0; i < req.headers.Size(); ++i)
     {
-      if (headers_equal(req.headers[i].name, content_length_name_))
+      if (headers_equal(req.headers[i].Name, content_length_name_))
       {
         try
         {
           content_length_ =
-            boost::lexical_cast<std::size_t>(req.headers[i].value);
+            boost::lexical_cast<std::size_t>(req.headers[i].Value);
         }
         catch (boost::bad_lexical_cast&)
         {

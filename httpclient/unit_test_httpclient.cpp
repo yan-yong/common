@@ -13,7 +13,7 @@ int main()
     HttpClient http_client;
     http_client.Open();
     http_client.SetResultCallback(HandleResult);
-    http_client.SetDefaultServConfig(ServChannel::CONCURENCY_NO_LIMIT, 0.8, 0, 10);
+    http_client.SetServConfig(CONCURENCY_NO_LIMIT, 0.8, 0, 10);
     Fetcher::Params fetch_params;
     fetch_params.conn_timeout.tv_sec  = 10;
     fetch_params.conn_timeout.tv_usec = 0;
@@ -26,7 +26,7 @@ int main()
     struct addrinfo *ai = create_addrinfo("172.18.40.27", 80);
     //struct addrinfo *ai = create_addrinfo("202.108.250.249", 443);
     http_client.PutRequest("https://i.alipayobjects.com/i/ecmng/png/201501/4Jdkug9K2v.png",
-        NULL, NULL, NULL, BatchConfig::DEFAULT_RES_PRIOR, BatchConfig::DEFAULT_BATCH_ID, ai);
+        NULL, NULL, NULL, NULL, ai);
     sleep(1000);
     return 0;
 }
