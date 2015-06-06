@@ -45,12 +45,7 @@ struct Proxy
 
     Proxy(std::string ip, uint16_t port)
     {
-        SetProxy(ip, port);
-    }
-
-    Proxy()
-    {
-
+        SetAddress(ip, port);
     }
 
     ~Proxy()
@@ -82,10 +77,10 @@ struct Proxy
         size_t sep_idx = addr_val.find(":");
         if(sep_idx == std::string::npos)
             return false;
-        ip_ = addr_val.substr(0, sep_idx);
+        strncpy(ip_, addr_val.substr(0, sep_idx).c_str(), 16);
         port_ = (uint16_t)atoi(addr_val.substr(sep_idx + 1).c_str());
         // https 
-        std::string https_val = val.get("https", empty_val);
+        std::string https_val = val.get("https", empty_val).asString();
         if(!addr_val.empty() && https_val == "1")
             https_enable_ = 1;
         else
@@ -97,11 +92,11 @@ struct Proxy
         else
             is_foreign_ = 0;
         // type
-        std::string type_val = val.get("type", empty_val);
+        std::string type_val = val.get("type", empty_val).asString();
         if(!type_val.empty())
             type_ = (Type)atoi(type_val.c_str());
         // avail
-        std::string avail_val = val.get("avail", empty_val);
+        std::string avail_val = val.get("avail", empty_val).asString();
         if(!avail_val.empty()) 
             request_cnt_ = (unsigned)atoi(avail_val.c_str());
         return true;
