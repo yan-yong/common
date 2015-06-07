@@ -56,6 +56,7 @@ struct HostChannel
 
 typedef linked_list_t<HostChannel, &HostChannel::queue_node_> HostChannelList;
 typedef linked_list_t<Resource, &Resource::queue_node_> ResourceList; 
+typedef boost::shared_ptr<ResourceList> ResourceListPtr; 
 
 struct ServChannel
 {

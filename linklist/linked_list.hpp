@@ -10,9 +10,11 @@
 template <typename T, linked_list_node_t T::*list_node>
 class linked_list_t
 {
+    linked_list_t& operator = (const linked_list_t&);
+    linked_list_t(const linked_list_t&);
+
 public:
     linked_list_t() { _head.next = _head.prev = &_head; }
-    linked_list_t& operator =(const linked_list_t & t) { _head = t._head; return *this; }
     bool empty() const { return _head.next == &_head; }
     void clear() { _head.next = _head.prev = &_head; }
     linked_list_node_t& head() { return _head; }

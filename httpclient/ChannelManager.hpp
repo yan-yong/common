@@ -90,8 +90,8 @@ public:
     bool CheckResolveDns(HostChannel*, time_t, time_t);
     std::string ToString(HostChannel* host_channel) const;
     std::string ToString(ServChannel* serv_channel) const;
-    ResourceList RemoveUnfinishRes(ServChannel* serv_channel);
-    ResourceList RemoveUnfinishRes(HostChannel* host_channel);
+    ResourceListPtr RemoveUnfinishRes(ServChannel* serv_channel);
+    ResourceListPtr RemoveUnfinishRes(HostChannel* host_channel);
     std::vector<HostChannel*> PopHostCache(unsigned cnt);
     std::vector<ServChannel*> PopServCache(unsigned cnt);
     std::vector<Resource*> PopAvailableResources(unsigned max_count);

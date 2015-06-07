@@ -179,25 +179,25 @@ void ChannelManager::DestroyChannel(ServChannel* serv_channel)
     delete serv_channel;
 }
 
-ResourceList ChannelManager::RemoveUnfinishRes(ServChannel* serv_channel)
+ResourceListPtr ChannelManager::RemoveUnfinishRes(ServChannel* serv_channel)
 {
     //SpinGuard guard(serv_channel->lock_);
-    ResourceList unfinish_lst;
+    ResourceListPtr unfinish_lst(new ResourceList);
     HostChannel * host_channel = NULL;
     while(!serv_channel->wait_host_lst_.empty())
     {
         host_channel = serv_channel->wait_host_lst_.get_front();
         //SpinGuard guard(host_channel->lock_);
-        ResourceList wait_lst = (host_channel->res_wait_queue_).splice();
-        unfinish_lst.splice_front(wait_lst);
+        ResourceListPtr wait_lst = (host_channel->res_wait_queue_).splice();
+        unfinish_lst->splice_front(*wait_lst);
         HostChannelList::del(*host_channel);
         serv_channel->idle_host_lst_.add_back(*host_channel);
     }
-    unfinish_lst.splice_front(serv_channel->fetching_lst_);
+    unfinish_lst->splice_front(serv_channel->fetching_lst_);
     if(serv_channel->pres_wait_queue_)
     {
-        ResourceList wait_lst = serv_channel->pres_wait_queue_->splice();
-        unfinish_lst.splice_front(wait_lst);
+        ResourceListPtr wait_lst = serv_channel->pres_wait_queue_->splice();
+        unfinish_lst->splice_front(*wait_lst);
     }
     //Resource* res = unfinish_lst.get_front();
     //while(!res)
@@ -208,10 +208,10 @@ ResourceList ChannelManager::RemoveUnfinishRes(ServChannel* serv_channel)
     return unfinish_lst;
 }
 
-ResourceList ChannelManager::RemoveUnfinishRes(HostChannel* host_channel)
+ResourceListPtr ChannelManager::RemoveUnfinishRes(HostChannel* host_channel)
 {
     //SpinGuard guard(host_channel->lock_);
-    ResourceList unfinish_lst = host_channel->res_wait_queue_.splice();
+    ResourceListPtr unfinish_lst = host_channel->res_wait_queue_.splice();
     __update_serv_host_state(host_channel);
     //Resource* res = unfinish_lst.get_front();
     //while(!res)

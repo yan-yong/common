@@ -71,14 +71,14 @@ void Storage::__destroy_resource(Resource* res)
     }
 } 
 
-void Storage::__save_unfinish_resource(ResourceList res_lst)
+void Storage::__save_unfinish_resource(ResourceListPtr res_lst)
 {
-    while(!res_lst.empty())
+    while(!res_lst->empty())
     {
-        Resource * res = res_lst.get_front();
+        Resource * res = res_lst->get_front();
         //TODO: save unfinish
         free(res);
-        res_lst.pop_front();
+        res_lst->pop_front();
     }
 }
 

@@ -58,7 +58,7 @@ class Storage
     HostKey __hostgetkey(const std::string& host, 
         const std::string& scheme = "http", unsigned port = 80);
     void __destroy_resource(Resource* res);
-    void __save_unfinish_resource(ResourceList res_lst);
+    void __save_unfinish_resource(ResourceListPtr res_lst);
 
 public:
     ~Storage();

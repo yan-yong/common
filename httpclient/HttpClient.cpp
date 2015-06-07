@@ -38,8 +38,13 @@ struct FetchRequest
 
     FetchRequest(const URI& uri, Resource* root_res)
     {
-        memset(&contex_, 0, sizeof(struct FetchRequest) - sizeof(URI));
         uri_ = uri;
+        contex_ = NULL;
+        user_headers_ = NULL;
+        content_ = NULL;
+        prior_ = RES_PRIORITY_NOUSE;
+        batch_cfg_ = NULL;
+        proxy_ai_ = NULL; 
         root_res_ = root_res;    
     }
 };
@@ -186,11 +191,11 @@ void HttpClient::ProcessFailResult(FetchErrorType fetch_error,
         if(res->serv_->IsServErr())
         {
             LOG_ERROR("%s: server ERROR\n", channel_manager_->ToString(res->serv_).c_str());
-            ResourceList res_lst = channel_manager_->RemoveUnfinishRes(res->host_);
-            while(!res_lst.empty())
+            ResourceListPtr res_lst = channel_manager_->RemoveUnfinishRes(res->host_);
+            while(!res_lst->empty())
             {
-                Resource * res = res_lst.get_front();
-                res_lst.pop_front();
+                Resource * res = res_lst->get_front();
+                res_lst->pop_front();
                 timed_lst_map_.del(*res);
                 PutResult(fetch_error, NULL, res->contex_);
                 Storage::Instance()->DestroyResource(res);
@@ -232,11 +237,11 @@ void HttpClient::HandleDnsResult(DnsResultType dns_result)
     //dns resolve error
     LOG_ERROR("%s, DNS resolve error, %s\n", host_channel->host_.c_str(),
         err_msg.c_str());
-    ResourceList res_lst = channel_manager_->RemoveUnfinishRes(host_channel);
-    while(!res_lst.empty())
+    ResourceListPtr res_lst = channel_manager_->RemoveUnfinishRes(host_channel);
+    while(!res_lst->empty())
     {
-        Resource * res = res_lst.get_front();
-        res_lst.pop_front();
+        Resource * res = res_lst->get_front();
+        res_lst->pop_front();
         timed_lst_map_.del(*res);
         FetchErrorType fetch_err(FETCH_FAIL_GROUP_DNS, RS_DNS_SUBMIT_FAIL);
         ProcessFailResult(fetch_err, res, NULL);

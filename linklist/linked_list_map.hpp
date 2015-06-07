@@ -160,12 +160,12 @@ public:
             Base::erase(it);
     }
     
-    List splice()
+    ListPtr splice()
     {
-        List splice_lst;
+        ListPtr splice_lst;
         for(typename Base::iterator it = Base::begin(); it != Base::end(); )
         {
-            splice_lst.splice_front(*it->second);
+            splice_lst->splice_front(*it->second);
             Base::erase(it++);
         }
         cur_cnt_ = 0;
