@@ -47,7 +47,7 @@ private:
     NormHttpHandler    norm_http_handler_;
     TunnelHttpHandler  tunnel_http_handler_;
     void* conn_lst_;
-    DNSResolver dns_resolver_;
+    boost::shared_ptr<DNSResolver> dns_resolver_;
     bool stop_;
 
 protected:
@@ -76,7 +76,7 @@ protected:
     void check_timeout(); 
 
 public:
-    HttpServer();
+    HttpServer(boost::shared_ptr<DNSResolver> dns_resolver = boost::shared_ptr<DNSResolver>() );
 
     virtual ~HttpServer();
 

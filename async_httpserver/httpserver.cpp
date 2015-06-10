@@ -8,12 +8,15 @@ using namespace http::server4;
 typedef shared_linked_list_t<connection, &connection::node_> conn_list_t;
 static const time_t DNS_CACHE_TIME = 3600; 
 
-HttpServer::HttpServer(): 
-    conn_timeout_sec_(0), io_work_(io_service_),
-    dns_resolver_(DNS_CACHE_TIME), stop_(false)
+HttpServer::HttpServer(boost::shared_ptr<DNSResolver> dns_resolver): 
+    conn_timeout_sec_(0), io_work_(io_service_), stop_(false)
 {
     conn_lst_ = (void*)new conn_list_t;
-    assert(dns_resolver_.Open() == 0);
+    if(!dns_resolver)
+        dns_resolver_.reset(new DNSResolver(DNS_CACHE_TIME));
+    else
+        dns_resolver_ = dns_resolver;
+    assert(dns_resolver_->Open() == 0);
 }
 
 HttpServer::~HttpServer()
@@ -112,7 +115,7 @@ void HttpServer::handle_tunnel_request(conn_ptr_t conn)
     DNSResolver::ResolverCallback resolver_cb = 
         boost::bind(&HttpServer::fetch_dns_result, shared_from_this(), _1);
     LOG_DEBUG("put to dns resolve: %s %d\n", host.c_str(), port);
-    dns_resolver_.Resolve(host, port, resolver_cb, (void*)conn.get());
+    dns_resolver_->Resolve(host, port, resolver_cb, (void*)conn.get());
 }
 
 void HttpServer::fetch_dns_result(DNSResolver::DnsResultType dns_result)
@@ -210,7 +213,7 @@ int HttpServer::initialize(std::string ip, std::string port,
 
 int HttpServer::run()
 {
-    while(true)
+    while(!stop_)
     { 
         try
         {
@@ -227,11 +230,11 @@ int HttpServer::run()
 
 void HttpServer::stop()
 {
-    if(!stop_)
+    if(!__sync_bool_compare_and_swap(&stop_, false, true))
         return;
-    stop_ = true;
     io_service_.stop();
-    dns_resolver_.Close();
+    dns_resolver_->Close();
+    LOG_INFO("HttpServer stopped.\n");
 }
 
 void HttpServer::post(boost::function<void (void)> cb)

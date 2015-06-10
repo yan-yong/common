@@ -32,6 +32,7 @@ void fun(DNSResolver::DnsResultType dns_result)
     {
         printf("%s FAILED: %s\n", (char*)contex, err_msg.c_str());
     }
+    printf("end ...\n");
 }
 
 int main()
@@ -52,5 +53,6 @@ int main()
         resolver.Resolve(host[i], 80, callback, host[i].c_str());
         sleep(1);
     }
-    sleep(1000);
+    resolver.Close();
+    //sleep(1000);
 }

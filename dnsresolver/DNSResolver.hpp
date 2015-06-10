@@ -89,6 +89,7 @@ protected:
     static time_t dns_cache_time_;
     static DnsCache*   dns_cache_;
     bool   closed_;
+    bool   openned_;
 
     static struct addrinfo* __copy_addrinfo(struct evutil_addrinfo *addr); 
     static void __internal_callback(int errcode, struct evutil_addrinfo *addr, void *contex);
@@ -105,8 +106,8 @@ protected:
 
 public:
     DNSResolver(time_t dns_cache_time = 0): 
-        base_(NULL), dnsbase_(NULL), 
-        closed_(false)
+        base_(NULL), dnsbase_(NULL), pid_(0), 
+        closed_(false), openned_(false)
     {
         if(!dns_cache_)
             dns_cache_ = new DnsCache();

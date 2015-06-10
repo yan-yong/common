@@ -56,8 +56,8 @@ static FETCH_FAIL_GROUP __srv_error_group(int error)
 }
 
 HttpClient::HttpClient(
-    size_t max_req_size, size_t max_result_size, 
-    const char* eth_name):
+    size_t max_req_size, size_t max_result_size, const char* eth_name, 
+    boost::shared_ptr<DNSResolver> dns_resolver):
     request_queue_(max_req_size*2), 
     result_queue_(max_result_size), 
     max_req_size_(max_req_size),
@@ -72,7 +72,10 @@ HttpClient::HttpClient(
     dns_error_time_(HostChannel::DEFAULT_DNS_ERROR_TIME) 
 {
     fetcher_.reset(new ThreadingFetcher(this));
-    dns_resolver_.reset(new DNSResolver());
+    if(!dns_resolver)
+        dns_resolver_.reset(new DNSResolver());
+    else
+        dns_resolver_ = dns_resolver;
     pthread_create(&tid_, NULL, RunThread, this);
     channel_manager_ = ChannelManager::Instance();
     if(eth_name)
@@ -142,7 +145,10 @@ void* HttpClient::RunThread(void *contex)
 
 void HttpClient::Close()
 {
-    stopped_ = true;
+    if(!__sync_bool_compare_and_swap(&stopped_, false, true))
+        return;
+    request_queue_.exit();
+    result_queue_.exit();
     fetcher_->End();
     dns_resolver_->Close(); 
     pthread_join(tid_, NULL);

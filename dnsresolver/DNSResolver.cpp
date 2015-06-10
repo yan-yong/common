@@ -87,6 +87,8 @@ void DNSResolver::__internal_callback(int errcode, struct evutil_addrinfo *addr,
 
 int DNSResolver::Open(std::string filename)
 {
+    if(!__sync_bool_compare_and_swap(&openned_, false, true))
+        return 0;
     base_ = event_base_new();
     if(!base_)
         return -1;
@@ -104,15 +106,18 @@ int DNSResolver::Open(std::string filename)
 
 void DNSResolver::Close()
 {
-    if(closed_)
+    if(!__sync_bool_compare_and_swap(&closed_, false, true))
         return;
-    event_base_loopexit(base_, NULL);
+    openned_ = false;
+    //event_base_loopbreak(base_);
+    event_base_loopexit(base_,  NULL);
+    pthread_cancel(pid_);
+    pthread_join(pid_, NULL);
+
     evdns_base_free(dnsbase_, 0);
     dnsbase_ = NULL;
     event_base_free(base_);
     base_ = NULL; 
-    pthread_join(pid_, NULL);
-    closed_ = true;
     if(dns_cache_)
     {
         delete dns_cache_;

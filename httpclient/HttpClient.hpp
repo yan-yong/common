@@ -91,7 +91,8 @@ public:
     HttpClient(
         size_t max_req_size    = DEFAULT_REQUEST_SIZE,
         size_t max_result_size = DEFAULT_RESULT_SIZE,
-        const char* eth_name   = NULL);
+        const char* eth_name   = NULL,
+        boost::shared_ptr<DNSResolver> dns_resolver = boost::shared_ptr<DNSResolver>());
 
     virtual bool PutRequest(
        const std::string& url,
