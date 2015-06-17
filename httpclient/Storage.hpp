@@ -51,7 +51,7 @@ class Storage
     size_t   host_cache_max_; 
     size_t   serv_cache_max_;
     bool     close_;
-    ChannelManager* channel_manager_;
+    boost::shared_ptr<ChannelManager> channel_manager_;
 
     int __aicmp(const struct addrinfo *ai1, const struct addrinfo *ai2);
     ServKey __aigetkey(const struct addrinfo *addrinfo, char scheme, sockaddr* local_addr);

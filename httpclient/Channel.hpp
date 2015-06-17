@@ -103,6 +103,7 @@ struct ServChannel
     HostChannelList idle_host_lst_;
     //固定serv的res
     ResPriorQueue * pres_wait_queue_;
+    std::string serv_addr_str_;
 
     //fetch_interval_ms为抓取的间隔时间, 单位为毫秒
     ServChannel():

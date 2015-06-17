@@ -39,14 +39,18 @@ DNSResolver::DnsResultType DNSResolver::__get_dns_cache(struct RequestItem* requ
         dns_cache_->erase(it);
         return DnsResultType();
     }
-    return it->second;
+    DNSResolver::DnsResultType res_copy(new ResultItem(*it->second));
+    res_copy->contex_ = request->contex_;
+    return res_copy;
 }
 
 void DNSResolver::__set_dns_cache(struct RequestItem* request, DNSResolver::DnsResultType result)
 {
     if(dns_cache_time_ > 0)
     {
-        (*dns_cache_)[request->cache_key()] = result;
+        DNSResolver::DnsResultType res_copy(new ResultItem(*result));
+        res_copy->contex_ = NULL;
+        (*dns_cache_)[request->cache_key()] = res_copy;
     }
 }
 
@@ -127,7 +131,6 @@ void DNSResolver::Close()
 
 DNSResolver::DnsReqKey DNSResolver::Resolve(const std::string& host, uint16_t port, ResolverCallback cb, const void* contex)
 {
-    //printf("put %s\n", host.c_str());
     RequestItem* request = new RequestItem(host, port, cb, contex);
     DnsResultType ret = __get_dns_cache(request);
     if(ret)

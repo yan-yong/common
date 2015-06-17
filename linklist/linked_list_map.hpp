@@ -162,7 +162,7 @@ public:
     
     ListPtr splice()
     {
-        ListPtr splice_lst;
+        ListPtr splice_lst(new List());
         for(typename Base::iterator it = Base::begin(); it != Base::end(); )
         {
             splice_lst->splice_front(*it->second);

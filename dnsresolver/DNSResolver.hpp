@@ -26,11 +26,24 @@ public:
         struct addrinfo* ai_;
         const void*      contex_;
         time_t           update_time_;
+        ResultItem(): ai_(NULL), contex_(NULL), update_time_(0)
+        {
+
+        }
         ResultItem(std::string err_msg, struct addrinfo* ai, 
             const void* contex):
             err_msg_(err_msg), ai_(ai), 
             contex_(contex), update_time_(time(NULL))
-        {}
+        {
+
+        }
+        ResultItem(const ResultItem& other)
+        {
+            err_msg_ = other.err_msg_;
+            ai_ = copy_addrinfo(other.ai_);
+            contex_ = other.contex_;
+            update_time_ = other.update_time_;
+        }
         ~ResultItem()
         {
             freeaddrinfo(ai_);
@@ -48,6 +61,7 @@ public:
             int i = 0;
             for(i = 0, ai = ai_; i < rdx; ++i)
                 ai = ai->ai_next;
+            assert(ai);
             struct sockaddr* sock = ai->ai_addr;
             char buf[100];
             if(!get_addr_string(sock, buf, 100, port))

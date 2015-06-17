@@ -68,10 +68,10 @@ struct Proxy
     }
     bool FromJson(const Json::Value& val)
     {
-        std::string empty_val;
+        Json::Value empty_val;
         // address
         Json::Value addr_obj = val.get("addr", empty_val);
-        if(addr_obj.empty())
+        if(addr_obj.isNull() || addr_obj.empty())
             return false;
         std::string addr_val = addr_obj.asString();
         size_t sep_idx = addr_val.find(":");
@@ -79,26 +79,28 @@ struct Proxy
             return false;
         strncpy(ip_, addr_val.substr(0, sep_idx).c_str(), 16);
         port_ = (uint16_t)atoi(addr_val.substr(sep_idx + 1).c_str());
-        // https 
-        std::string https_val = val.get("https", empty_val).asString();
-        if(!addr_val.empty() && https_val == "1")
+        // https
+        Json::Value https_obj = val.get("https", empty_val); 
+        if(https_obj.isNull() && !https_obj.empty() && https_obj.asString() == "1")
             https_enable_ = 1;
         else
             https_enable_ = 0;
         // foreign
         Json::Value foreign_obj = val.get("fr", empty_val);
-        if(foreign_obj.empty() || foreign_obj.asString() == "1")
+        if((!foreign_obj.isNull() && foreign_obj.empty()) || foreign_obj.asString() == "1")
             is_foreign_ = 1;
         else
             is_foreign_ = 0;
         // type
-        std::string type_val = val.get("type", empty_val).asString();
-        if(!type_val.empty())
-            type_ = (Type)atoi(type_val.c_str());
+        Json::Value type_obj = val.get("type", empty_val);
+        if(!type_obj.isNull() && !type_obj.empty())
+        {
+            type_ = (Type)type_obj.asInt();
+        }
         // avail
-        std::string avail_val = val.get("avail", empty_val).asString();
-        if(!avail_val.empty()) 
-            request_cnt_ = (unsigned)atoi(avail_val.c_str());
+        Json::Value avail_obj = val.get("avail", empty_val);
+        if(!avail_obj.isNull() && !avail_obj.empty()) 
+            request_cnt_ = (unsigned)atoi(avail_obj.asString().c_str());
         return true;
     }
     Json::Value ToJson() const

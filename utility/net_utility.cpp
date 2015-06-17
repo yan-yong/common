@@ -180,18 +180,39 @@ bool get_ai_string(struct addrinfo * ai, char* addrstr, size_t addrstr_length)
 
 struct addrinfo* copy_addrinfo(struct addrinfo* addr)
 {
-    if(!addr)
-        return NULL;
-    unsigned sz = sizeof(struct addrinfo);
-    if(addr->ai_family == AF_INET)
-        sz += sizeof(struct sockaddr_in);
-    else
-        sz += sizeof(struct sockaddr_in6);
-    struct addrinfo* cur_ai_copy = (struct addrinfo*)malloc(sz);
-    memset(cur_ai_copy, 0, sz);
-    cur_ai_copy->ai_addr = (struct sockaddr *)(cur_ai_copy + 1); 
-    memcpy(cur_ai_copy, addr, sz);
-    return cur_ai_copy;
+    struct addrinfo* ret = NULL;
+    struct addrinfo* ai  = NULL;
+    while(addr)
+    {
+        unsigned addr_sz = 0;
+        if(addr->ai_family == AF_INET6)
+            addr_sz = sizeof(struct sockaddr_in6);
+        else
+            addr_sz = sizeof(struct sockaddr_in);
+        unsigned sz = sizeof(struct addrinfo) + addr_sz;
+        if(ai)
+        {
+            ai->ai_next = (struct addrinfo*)malloc(sz);
+            ai = ai->ai_next;
+        }
+        else
+        {
+            ai = (struct addrinfo*)malloc(sz);
+            ret = ai;
+        }
+        memset(ai, 0, sz);
+        ai->ai_addr = (sockaddr*)(ai + 1);
+        memcpy(ai->ai_addr, addr->ai_addr, addr_sz);
+        ai->ai_flags = addr->ai_flags;
+        ai->ai_family= addr->ai_family;
+        ai->ai_socktype = addr->ai_socktype;
+        ai->ai_protocol = addr->ai_protocol;
+        ai->ai_addrlen  = addr_sz;
+        if(addr->ai_canonname)
+            ai->ai_canonname= strdup(addr->ai_canonname);
+        addr = addr->ai_next;
+    }
+    return ret;
 }
 
 struct addrinfo* create_addrinfo(in_addr ip_addr, uint16_t port)

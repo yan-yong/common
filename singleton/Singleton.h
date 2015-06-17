@@ -13,7 +13,7 @@
     public: \
         static T* m_instance; \
         static boost::shared_ptr<T> m_inst_guard;   \
-        static T* Instance(){ \
+        static boost::shared_ptr<T> Instance(){ \
             if(!m_instance) { \
                 T* instance = new T();  \
                 if(!__sync_bool_compare_and_swap(&m_instance, NULL, instance))  \
@@ -21,7 +21,7 @@
                 else  \
                     m_inst_guard.reset(instance);  \
             }   \
-            return m_instance; \
+            return m_inst_guard; \
         }  
 
 #define DEFINE_SINGLETON(T) \

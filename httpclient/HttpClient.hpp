@@ -43,6 +43,14 @@ public:
                 resp_ = NULL;
             }
         }
+        bool is_error() const
+        {
+            return error_.error_num() != RS_OK;
+        }
+        std::string error_msg() const
+        {
+            return GetSpiderError(error_);
+        }
     };
 
     typedef boost::shared_ptr<FetchResult> ResultPtr;
@@ -136,7 +144,7 @@ private:
     time_t cur_time_;
     bool stopped_;
     pthread_t tid_;
-    ChannelManager* channel_manager_;
+    boost::shared_ptr<ChannelManager> channel_manager_;
     sockaddr * local_addr_;
     SpinLock wait_lst_lock_;
 

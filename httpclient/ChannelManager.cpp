@@ -1,6 +1,7 @@
 #include "utility/net_utility.h"
 #include "ChannelManager.hpp"
 #include "fetcher/Fetcher.hpp"
+#include "log/log.h"
 
 DEFINE_SINGLETON(ChannelManager);
 
@@ -105,9 +106,9 @@ void ChannelManager::SetServChannel(HostChannel* host_channel, ServChannel * ser
     {
         //SpinGuard serv_guard(__serv_lock(last_serv));
         //SpinGuard host_guard(host_channel->lock_);
+        host_channel->dns_resolving_ = 0;
         if(last_serv && serv_channel->serv_key_ == last_serv->serv_key_)
             return;
-        host_channel->dns_resolving_ = 0;
         HostChannelList::del(*host_channel);
         check_add_cache(last_serv);
         host_channel->serv_ = serv_channel;
@@ -334,7 +335,7 @@ bool ChannelManager::CheckResolveDns(HostChannel* host_channel,
     if(host_channel->dns_resolving_)
         return false;
     // 有dns, 但还不到更新的时候
-    if(host_channel->serv_ && cur_time < host_channel->update_time_ + dns_update_time)
+    if(host_channel->serv_ && cur_time < host_channel->update_time_ + dns_update_time*1000)
         return false;
     host_channel->dns_resolving_ = 1;
     host_channel->host_error_    = 0;
@@ -346,6 +347,8 @@ void ChannelManager::ReleaseConnection(Resource* res)
     //SpinGuard serv_guard(__serv_lock(res->serv_));
     if(res->serv_ && res->conn_)
     {
+        char conn_str[100];
+        ThreadingFetcher::ConnectionToString(res->conn_, conn_str, 100);
         //reset back to HTTPS
         if(res->proxy_state_ == Resource::PROXY_CONNECT)
             ThreadingFetcher::SetConnectionScheme(res->conn_, PROTOCOL_HTTPS);
@@ -356,6 +359,8 @@ void ChannelManager::ReleaseConnection(Resource* res)
         res->conn_ = NULL;
     }
     check_serv_ready(res->serv_);
+    char conn_str[100];
+    ThreadingFetcher::ConnectionToString(res->serv_->conn_storage_[0], conn_str, 100);
 }
 
 Resource* ChannelManager::pop_resource(ServChannel* serv_channel)
@@ -402,6 +407,8 @@ void ChannelManager::pop_available_resources(
         Resource*    res = pop_resource(serv_channel);
         serv_channel->SetFetchTime(cur_time);
         res->conn_       = conn;
+        char conn_str[100];
+        ThreadingFetcher::ConnectionToString(conn, conn_str, 100);
         // proxy connect时, 使用http协议
         if(res->proxy_state_ == Resource::PROXY_CONNECT)
             ThreadingFetcher::SetConnectionScheme(res->conn_, PROTOCOL_HTTP);
@@ -470,6 +477,8 @@ std::string ChannelManager::ToString(HostChannel* host_channel) const
 
 std::string ChannelManager::ToString(ServChannel* serv_channel) const
 {
+    return serv_channel->serv_addr_str_;
+    /*
     Connection* conn = NULL;
     std::string str;
     if(serv_channel->conn_storage_.size() > 0)
@@ -478,14 +487,16 @@ std::string ChannelManager::ToString(ServChannel* serv_channel) const
         conn = serv_channel->fetching_lst_.get_front()->conn_;
     if(!conn)
         return "0.0.0.0";
-    sockaddr* addr = NULL;
+    sockaddr* addr = (sockaddr*)malloc(sizeof(sockaddr));
     ThreadingFetcher::GetSockAddr(conn, addr);
     char addr_str[20];
     uint16_t port = 0;
     get_addr_string(addr, addr_str, 10, port);
+    free(addr);
     size_t addr_len = strlen(addr_str);
     snprintf(addr_str + addr_len, 20 - addr_len, ":%hu", port);
     return addr_str;
+    */
 }
 
 ServChannel* ChannelManager::CreateServChannel(
@@ -502,8 +513,14 @@ ServChannel* ChannelManager::CreateServChannel(
     serv->max_err_count_ = max_err_count;
     serv->err_delay_sec_ = err_delay_sec;
     struct addrinfo * cur_ai = ai;
+    serv->serv_addr_str_.clear();
     while(cur_ai)
     {
+        char addr_str[100];
+        get_ai_string(cur_ai, addr_str, 100);
+        if(cur_ai != ai)
+            serv->serv_addr_str_ += ";";
+        serv->serv_addr_str_ += addr_str;
         FetchAddress fetch_addr;
         fetch_addr.remote_addr    = cur_ai->ai_addr;
         fetch_addr.remote_addrlen = sizeof(struct sockaddr);

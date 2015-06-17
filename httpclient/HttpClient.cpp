@@ -68,7 +68,7 @@ HttpClient::HttpClient(
     serv_max_err_rate_(ServChannel::DEFAULT_MAX_ERR_RATE),
     serv_err_delay_sec_(ServChannel::DEFAULT_ERR_DELAY_SEC),
     serv_max_err_count_(ServChannel::DEFAULT_MAX_ERR_NUM),
-    dns_update_time_(HostChannel::DEFAULT_DNS_UPDATE_TIME),
+    dns_update_time_(DEFAULT_DNS_UPDATE_TIME),
     dns_error_time_(HostChannel::DEFAULT_DNS_ERROR_TIME) 
 {
     fetcher_.reset(new ThreadingFetcher(this));
@@ -214,6 +214,10 @@ void HttpClient::ProcessFailResult(FetchErrorType fetch_error,
 
 void HttpClient::PutDnsResult(DnsResultType dns_result)
 {
+    std::string addr_str;
+    uint16_t port = 0;
+    dns_result->GetAddr(addr_str, port);
+    //LOG_DEBUG("Put dns result: %s\n", addr_str.c_str());
     dns_queue_.enqueue(dns_result);
 }
 
@@ -230,8 +234,8 @@ void HttpClient::HandleDnsResult(DnsResultType dns_result)
     {
         char ai_str[1024];
         get_ai_string(ai, ai_str, 1024);
-        LOG_INFO("%s, DNS resolve success: %s.\n", 
-            host_channel->host_.c_str(), ai_str);
+        LOG_INFO("%s, DNS resolve success: %p %s.\n", 
+            host_channel->host_.c_str(), ai, ai_str);
         ServChannel* serv_channel  = Storage::Instance()->AcquireServChannel(
             host_channel->scheme_, ai, 
             serv_concurency_mode_, serv_max_err_rate_,

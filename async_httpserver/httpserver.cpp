@@ -114,7 +114,7 @@ void HttpServer::handle_tunnel_request(conn_ptr_t conn)
     }
     DNSResolver::ResolverCallback resolver_cb = 
         boost::bind(&HttpServer::fetch_dns_result, shared_from_this(), _1);
-    LOG_DEBUG("put to dns resolve: %s %d\n", host.c_str(), port);
+    //LOG_DEBUG("put to dns resolve: %s %d\n", host.c_str(), port);
     dns_resolver_->Resolve(host, port, resolver_cb, (void*)conn.get());
 }
 
