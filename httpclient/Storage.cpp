@@ -230,7 +230,7 @@ void Storage::SetHostSpeed(const std::string& host, unsigned fetch_interval_ms)
 
 Resource* Storage::CreateResource(
         const  URI& uri,
-        void*  contex,
+        const  void*  contex,
         BatchConfig* batch_cfg,  
         ResourcePriority prior,
         const MessageHeaders* user_headers,

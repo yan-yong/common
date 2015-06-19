@@ -27,11 +27,11 @@ public:
     {
         FetchErrorType  error_;
         HttpFetcherResponse*  resp_;
-        void* contex_;
+        const void* contex_;
         time_t resp_cost_ms_;
 
         FetchResult(FetchErrorType error, 
-            HttpFetcherResponse *resp, void* contex): 
+            HttpFetcherResponse *resp, const void* contex): 
             error_(error), resp_(resp), contex_(contex),
             resp_cost_ms_(86400000)
         {}
@@ -77,7 +77,7 @@ protected:
     static  void* RunThread(void *context);
     void UpdateBatchConfig(std::string&, const BatchConfig&);
     void Pool();
-    void PutResult(FetchErrorType, HttpFetcherResponse*, void*);
+    void PutResult(FetchErrorType, HttpFetcherResponse*, const void*);
     void PutDnsResult(DnsResultType dns_result);
     void HandleRequest(RequestPtr req);
 
@@ -104,8 +104,8 @@ public:
 
     virtual bool PutRequest(
        const std::string& url,
-       void*  contex = NULL,
-       MessageHeaders* user_headers = NULL,
+       const void*  contex = NULL,
+       const MessageHeaders* user_headers = NULL,
        const std::vector<char>* content = NULL,
        BatchConfig* batch_cfg = NULL, 
        struct addrinfo* proxy_ai = NULL,

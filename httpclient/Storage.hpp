@@ -91,7 +91,7 @@ public:
 
     Resource* CreateResource(
             const URI& uri,
-            void* contex,
+            const void* contex,
             BatchConfig* batch_cfg, 
             ResourcePriority prior,
             const MessageHeaders* user_headers,

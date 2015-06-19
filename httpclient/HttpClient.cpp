@@ -11,8 +11,8 @@ typedef Storage::HostKey HostKey;
 struct FetchRequest
 {
     URI uri_;
-    void* contex_;
-    MessageHeaders* user_headers_;
+    const void* contex_;
+    const MessageHeaders* user_headers_;
     const std::vector<char>* content_;
     ResourcePriority prior_;
     BatchConfig * batch_cfg_;
@@ -22,8 +22,8 @@ struct FetchRequest
 
     FetchRequest(
             const URI& uri,
-            void*  contex,
-            MessageHeaders* user_headers,
+            const void*  contex,
+            const MessageHeaders* user_headers,
             const std::vector<char>* content,
             ResourcePriority prior,
             BatchConfig* batch_cfg,
@@ -68,7 +68,7 @@ HttpClient::HttpClient(
     serv_max_err_rate_(ServChannel::DEFAULT_MAX_ERR_RATE),
     serv_err_delay_sec_(ServChannel::DEFAULT_ERR_DELAY_SEC),
     serv_max_err_count_(ServChannel::DEFAULT_MAX_ERR_NUM),
-    dns_update_time_(DEFAULT_DNS_UPDATE_TIME),
+    dns_update_time_(HostChannel::DEFAULT_DNS_UPDATE_TIME),
     dns_error_time_(HostChannel::DEFAULT_DNS_ERROR_TIME) 
 {
     fetcher_.reset(new ThreadingFetcher(this));
@@ -161,7 +161,7 @@ void HttpClient::UpdateBatchConfig(std::string& batch_id,
 }
 
 void HttpClient::PutResult(FetchErrorType error, 
-    HttpFetcherResponse *message, void* contex)
+    HttpFetcherResponse *message, const void* contex)
 {
     boost::shared_ptr<FetchResult> result(
         new FetchResult(error, message, contex));
@@ -426,8 +426,8 @@ void HttpClient::HandleRequest(RequestPtr request)
 
 bool HttpClient::PutRequest(
     const  std::string& url,
-    void*  contex,
-    MessageHeaders* user_headers,
+    const void*  contex,
+    const MessageHeaders* user_headers,
     const std::vector<char>* content,
     BatchConfig * batch_cfg,
     struct addrinfo * proxy_ai,

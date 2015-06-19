@@ -34,7 +34,7 @@ public:
 public:
     void Initialize(HostChannel* host_channel,
         const std::string& suffix, ResourcePriority prior, 
-        void* contex, const MessageHeaders * user_headers,
+        const void* contex, const MessageHeaders * user_headers,
         const std::vector<char>* post_content, 
         Resource* parent_res, BatchConfig *cfg);
     std::string GetHostWithPort(bool with_port = false) const;
@@ -75,7 +75,7 @@ public:
     char*              suffix_;
     time_t             arrive_time_;
     time_t             fetch_time_;
-    void*              contex_;
+    const void*        contex_;
     BatchConfig *      cfg_;
     void*              extend_[0]; 
 };

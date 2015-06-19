@@ -4,7 +4,7 @@
 //user_headers/post_content 在外部开内存, 浅拷贝
 void Resource::Initialize(
     HostChannel* host_channel,const std::string& suffix, 
-    ResourcePriority prior, void* contex,
+    ResourcePriority prior, const void* contex,
     const MessageHeaders * user_headers,
     const std::vector<char>* post_content, 
     Resource* root_res, 
