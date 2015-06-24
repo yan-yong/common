@@ -88,7 +88,7 @@ bool noneEmptyStr(const char * str);
 //void tolower(std::string &str);
 
 /// \return true if response is HTML page
-bool isHtml(const Response& response);
+bool isHtml(MessageHeaders& headers, std::vector<char>& decode_body);
 
 /// If 'range' is byte-range or content_length == 0, do nothing;
 /// If 'range' is suffix-range, convert it to a byte-range.

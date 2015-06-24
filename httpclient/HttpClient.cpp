@@ -175,7 +175,7 @@ void HttpClient::ProcessSuccResult(Resource* res, HttpFetcherResponse* message)
 {
     __sync_fetch_and_sub(&cur_req_size_, 1);
     FetchErrorType fetch_ok(FETCH_FAIL_GROUP_OK, RS_OK);
-    LOG_INFO("%s, SUCCESS\n", res->GetUrl().c_str());
+    LOG_INFO("%s, SUCCESS, msg size: %zd\n", res->GetUrl().c_str(), message->MessageSize());
     if(res->serv_)
         res->serv_->AddSucc();
     PutResult(fetch_ok, message, res->contex_);
@@ -282,9 +282,6 @@ void HttpClient::HandleHttpResponse3xx(Resource* res, HttpFetcherResponse *resp)
 
 void HttpClient::HandleHttpResponse2xx(Resource* res, HttpFetcherResponse *resp)
 {
-    char error_msg[100];
-    if(resp->ContentEncoding(error_msg) != 0)
-        LOG_ERROR("%s, ContentEncoding error, %s", res->RootUrl().c_str(), error_msg);
     if (resp->SizeExceeded())
     {
         FetchErrorType fetch_error(FETCH_FAIL_GROUP_RULE, RS_INVALID_PAGESIZE);

@@ -25,6 +25,7 @@
 #include "httpparser/HttpMessage.hpp"
 #include "SchedulerTypes.hpp"
 #include "singleton/Singleton.h"
+#include "httpparser/HttpFetchProtocal.hpp"
 
 struct RedirectInfo
 {
@@ -43,7 +44,7 @@ class TRedirectChecker
 #if 0
         bool checkScriptRedirect(const std::string &from, const Response &resp, std::string &result);
 #endif
-        bool checkMetaRedirect(const std::string &from, const Response &resp, std::string &result);
+        bool checkMetaRedirect(const std::string &from, HttpFetcherResponse &resp, std::string &result);
 
         ~TRedirectChecker();
 

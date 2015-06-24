@@ -189,8 +189,6 @@ void connection::__write_http_data_handler(const err_code_t& ec,
 
 void connection::read_http_request()
 {
-    if(!peer_rd_buffer_)
-        peer_rd_buffer_.reset(new boost::array<char, 8192>);
     http_request_.reset(new request());
     request_parse_.reset(new request_parser());
     if(!peer_rd_buffer_)
@@ -202,13 +200,26 @@ void connection::read_http_request()
 void connection::__write_http_reply(boost::shared_ptr<reply> resp)
 {
     http_reply_ = resp;
-    static const unsigned GZIP_MIN_LEN = 1024;
-    if(resp->content.size() > GZIP_MIN_LEN)
+    std::string encode_header = "Content-Encoding";
+    // response内容没有压缩，而且客户端接收压缩，则考虑进行压缩
+    if(resp->headers.Find(encode_header) < 0)
     {
-        std::vector<std::string> header_values= http_request_->get_header("Accept-Encoding");
-        if(header_values.size() && header_values[0].find("gzip") > 0)
-            resp->compress();
+        static const unsigned GZIP_MIN_LEN = 1024;
+        if(resp->content.size() > GZIP_MIN_LEN)
+        {
+            std::vector<std::string> header_values= http_request_->get_header("Accept-Encoding");
+            if(header_values.size() && header_values[0].find("gzip") > 0)
+                resp->compress();
+        }
     }
+    // 使用Content-Length头替换Transfer-Encoding头
+    int tansfer_idx = resp->headers.Find("Transfer-Encoding");
+    if(tansfer_idx >= 0)
+    {
+        resp->headers.Remove(tansfer_idx);
+        resp->headers.Set("Content-Length", boost::lexical_cast<std::string>(resp->content.size()));
+    }
+
     std::string keep_alive_value = keep_alive_ ? "keep-alive":"close";
     resp->set_header("Connection", keep_alive_value);
     boost::asio::async_write(*peer_socket_, http_reply_->to_buffers(), 

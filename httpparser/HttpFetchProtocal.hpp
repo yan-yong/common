@@ -66,6 +66,7 @@ class HttpFetcherResponse : public FetcherResponse, public Response
 	}
 
 	int ContentEncoding(char error_msg[50]);
+    int ContentEncoding(char error_msg[50], std::vector<char>& buffer);
 	virtual int Append(const void *buf, size_t length);
 	int __Append(const void *buf, size_t length);
 

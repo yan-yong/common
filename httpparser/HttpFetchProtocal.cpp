@@ -242,46 +242,72 @@ int HttpFetcherResponse::Append(const void *buf, size_t length)
     return result;
 }
 
-int HttpFetcherResponse::ContentEncoding(char error_msg[50]) {
+int HttpFetcherResponse::ContentEncoding(char error_msg[50], std::vector<char>& buffer) 
+{
     //NO Content-Encoding
     int index = Headers.Find("Content-Encoding");
     if (index < 0)
-	return 0;
-    //在解压之前，保存原始数据大小，用于记录抓取流量
-    m_OriginalSize = m_HeadersSize + Body.size(); 
+        return 0;
     //EMPTY_BODY
-    if(Body.size() == 0){
-	snprintf(error_msg, 50, "%s", "EMPTY_BODY"); 
-	return -2;
+    if(Body.size() == 0)
+    {
+        snprintf(error_msg, 50, "%s", "EMPTY_BODY"); 
+        return -2;
     }
-	
+
     /// handle Content-Encoding
-    std::vector<char> buffer;
     if (Headers[index].Value == "gzip")
     {   
-	if (GzipUncompress(&Body[0], Body.size(), buffer) == 0) {
-	    std::swap(buffer, Body);
-	    return 0;
-	}
-	snprintf(error_msg, 50, "%s", "GUNZIP_ERROR"); 
-	return -3; 
-    }    
+        if (GzipUncompress(&Body[0], Body.size(), buffer) == 0) 
+            return 0;
+        buffer = Body; 
+        snprintf(error_msg, 50, "%s", "GUNZIP_ERROR");
+        return -3; 
+    }
     else if(Headers[index].Value == "deflate")
     {    
-	if (DeflateUncompress(&Body[0], Body.size(), buffer) == 0){
-	    std::swap(buffer, Body);
-	    return 0;
-	}
-	//INFLATE_ERROR
-	snprintf(error_msg, 50, "%s", "INFLATE_ERROR"); 
-	return -4;
+        if (DeflateUncompress(&Body[0], Body.size(), buffer) == 0)
+            return 0;
+        //INFLATE_ERROR
+        buffer = Body; 
+        snprintf(error_msg, 50, "%s", "INFLATE_ERROR"); 
+        return -4;
     }    
     // do nothing
     else if(Headers[index].Value == "none")
-	return 0;
+    {
+        buffer = Body;
+        return 0;
+    }
 
     //UNKNOWN_CONTENT_ENCODING
+    buffer = Body; 
     snprintf(error_msg, 50, "%s", "UNKNOWN_CONTENT_ENCODING"); 
     return -5;
+}
+
+
+int HttpFetcherResponse::ContentEncoding(char error_msg[50]) 
+{
+    //在解压之前，保存原始数据大小，用于记录抓取流量
+    m_OriginalSize = m_HeadersSize + Body.size(); 
+    /// handle Content-Encoding
+    std::vector<char> buffer;
+    int ret = ContentEncoding(error_msg, buffer);
+    if(ret == 0)
+    {
+	    std::swap(buffer, Body);
+        // 已经解压了，得去除content-encoding头
+        int encode_idx = Headers.Find(std::string("Content-Encoding"));
+        if(encode_idx >= 0)
+        {
+            Headers.Remove(encode_idx);
+            char content_len_str[10];
+            snprintf(content_len_str, 10, "%zd", Body.size());
+            // 更改content-length
+            Headers.Set("Content-Length", content_len_str);
+        }
+    }
+    return ret;
 }
 

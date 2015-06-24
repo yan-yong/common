@@ -230,18 +230,18 @@ bool noneEmptyStr(const char * str)
 //    }
 //}
 
-bool isHtml(const Response& response)
+bool isHtml(MessageHeaders& headers, std::vector<char>& decode_body)
 {
-    int index = response.Headers.Find("Content-Type");
+    int index = headers.Find("Content-Type");
     if (index >= 0)
     {
-        if (response.Headers[index].Value.find("text/html") != std::string::npos)
+        if (headers[index].Value.find("text/html") != std::string::npos)
             return true;
     }
 
 
-    const char* body = &response.Body[0];
-    size_t body_size = response.Body.size();
+    const char* body = &decode_body[0];
+    size_t body_size = decode_body.size();
     while (body_size > 0 && isspace(*body))
     {
         body++;
@@ -266,7 +266,6 @@ bool isHtml(const Response& response)
             body++;
             body_size--;
         }
-
     }
     return body_size >= 6 && strncasecmp(body, "<html", 5) == 0;
 }

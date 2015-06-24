@@ -25,6 +25,7 @@
 #include "httpparser/HttpMessage.hpp"
 #include "httpparser/hlink.h"
 #include "httpparser/TUtility.hpp"
+#include "log/log.h"
 
 class TRedirectChecker::Impl 
 {
@@ -38,9 +39,14 @@ class TRedirectChecker::Impl
         }
 
         bool checkMetaRedirect(const std::string & from,
-            const Response & resp, std::string & result) 
+            HttpFetcherResponse & resp, std::string & result) 
         {
-            if (!isHtml(resp)) 
+            char error_msg[100];
+            std::vector<char> decode_body;
+            if(resp.ContentEncoding(error_msg, decode_body) != 0)
+                LOG_ERROR("%s, ContentEncoding error, %s", from.c_str(), error_msg);
+
+            if (!isHtml(resp.Headers, decode_body)) 
                 return false;
 
             URI from_uri;
@@ -50,7 +56,7 @@ class TRedirectChecker::Impl
                 return false;
             }
 
-            if (metaRedirct(from_uri, &resp.Body[0], resp.Body.size(), result)) 
+            if (metaRedirct(from_uri, &decode_body[0], decode_body.size(), result)) 
             {
                 return true;
             }
@@ -194,7 +200,7 @@ bool TRedirectChecker::checkScriptRedirect(const std::string & from, const Respo
 }
 #endif
 
-bool TRedirectChecker::checkMetaRedirect(const std::string & from, const Response & resp, std::string & result) 
+bool TRedirectChecker::checkMetaRedirect(const std::string & from, HttpFetcherResponse & resp, std::string & result) 
 {
     return impl_->checkMetaRedirect(from, resp, result);
 }
